@@ -52,7 +52,11 @@ if ($null -eq $OpenCommand) {
 #Check kolmafia for name of latest build
 $base = "https://builds.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/artifact/dist/"
 Set-Location $installLocation
-$current = gci .\*.jar
+$current = Get-ChildItem .\*.jar
+if ($current.count -gt 1) {
+    $current | Sort-Object -Property Name | Select-Object -First 1 | Remove-Item
+    $current = $current | Sort-Object -Property Name -Descending | Select-Object -First 1
+}
 try {
     $response = Invoke-WebRequest $base
     $latest = ($response.Links | Select href | ? {$_.href -like "*.jar"}).href
