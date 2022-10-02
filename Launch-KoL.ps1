@@ -1,6 +1,15 @@
-﻿#Don't Edit This Script
+﻿$scriptPath = split-path -parent $MyInvocation.MyCommand.Definition
+#Don't Edit This Script
 #Edit Launch-KoL.pref instead
-$scriptPath = split-path -parent $MyInvocation.MyCommand.Definition
+if (-not (Test-Path $scriptPath\Launch-Kol.pref)) {
+    $default = @"
+<?xml version="1.0"?>
+<Location>
+    $scriptPath
+</Location>
+"@
+    $default | Out-File -FilePath $scriptPath\Launch-Kol.pref -NoClobber
+}
 $installLocation = (Select-Xml -Path $scriptPath\Launch-KoL.pref -XPath '/Location').Node.InnerText.Trim()
 if ($installLocation -match 'InsertYourKolPath') {
     $installLocation = $scriptPath
@@ -56,6 +65,14 @@ $current = Get-ChildItem .\*.jar
 if ($current.count -gt 1) {
     $current | Sort-Object -Property Name | Select-Object -First 1 | Remove-Item
     $current = $current | Sort-Object -Property Name -Descending | Select-Object -First 1
+} elseif ($current.Count -eq 0) {
+    $message = "No jar file found in the provided folder. Download latest mafia to $($installLocation)?"
+    $answer = [System.Windows.Forms.MessageBox]::Show($message,"Mafia Not Found!",[System.Windows.Forms.MessageBoxButtons]::YesNo,[System.Windows.Forms.MessageBoxIcon]::Question,[System.Windows.Forms.MessageBoxDefaultButton]::Button1,0)
+    if ($answer -eq [System.Windows.Forms.DialogResult]::No) {
+        exit
+    } else {
+        $current = @{Name = '1'}
+    }
 }
 try {
     $response = Invoke-WebRequest $base
@@ -64,7 +81,9 @@ try {
     if ($current.Name -ne $latest) {
         #If the current local build does not match the latest build, remove local build and download latest
         Invoke-WebRequest $(-join($base, $latest)) -OutFile ".\$latest"
-        Remove-Item $current.FullName
+        if ($current.Name -ne '1') {
+            Remove-Item $current.FullName
+        }
     }
 } catch {
     $StatusCode = $_.Exception.Response.StatusCode.value__
