@@ -1,7 +1,10 @@
-﻿#Edit This Based On Where KoL lives
-$installLocation = "$env:USERPROFILE\Documents\KoL"
-
-#Probably don't edit below this line
+﻿#Don't Edit This Script
+#Edit Launch-KoL.pref instead
+$scriptPath = split-path -parent $MyInvocation.MyCommand.Definition
+$installLocation = (Select-Xml -Path $scriptPath\Launch-KoL.pref -XPath '/Location').Node.InnerText.Trim()
+if ($installLocation -match 'InsertYourKolPath') {
+    $installLocation = $scriptPath
+}
 
 Function Get-ShellOpenFromExtention {
     param(
