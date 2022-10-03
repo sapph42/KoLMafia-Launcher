@@ -3,16 +3,21 @@ $scriptPath = $PSScriptRoot
 if (-not (Test-Path $scriptPath\Launch-Kol.pref)) {
     $default = @"
 <?xml version="1.0"?>
+<preferences>
     <Location>$scriptPath</Location>
     <MaxAttempts>3</MaxAttempts>
+</preferences>
 "@
     $default | Out-File -FilePath $scriptPath\Launch-Kol.pref -NoClobber
 }
-$installLocation = (Select-Xml -Path $scriptPath\Launch-KoL.pref -XPath '/Location').Node.InnerText.Trim()
+$preferences = [xml](Get-Content $scriptPath\Launch-Kol.pref)
+$installLocation = $preferences.preferences.Location.Trim()
 try {
-    $maxAttempts = (Select-Xml -Path $scriptPath\Launch-KoL.pref -XPath '/MaxAttempts').Node.InnerText.Trim()
+    $maxAttempts = $preferences.preferences.MaxAttempts.Trim()
 } catch {
     $maxAttempts = 3
+    $preferences.preferences.AppendChild($preferences.CreateElement("MaxAttempts"))
+    $preferences.Save("$scriptPath\Launch-Kol.pref")
 }
 if ($installLocation -match 'InsertYourKolPath') {
     $installLocation = $scriptPath
