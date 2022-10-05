@@ -1,4 +1,6 @@
-package.psd1
-Sign Launcher.lnk
-Launch-Kol.pref
-KoL.code-workspace
+*.psd1
+*.pref
+*.code-workspace
+*.ico
+*.pfx
+*.lnk
