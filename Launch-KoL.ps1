@@ -1,14 +1,25 @@
-Add-Type -AssemblyName 'System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'
+﻿Add-Type -AssemblyName 'System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'
 $scriptPath = $PSScriptRoot
-if (-not (Test-Path $scriptPath\Launch-Kol.pref)) {
+
+Function Initialize-Installtion {
+    $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
+    $OpenFileDialog.initialDirectory = $scriptPath
+    $OpenFileDialog.filter = “JAR files (*.jar)| *.jar”
+    $OpenFileDialog.Title = "Select Location of KolMafia JAR"
+    $OpenFileDialog.ShowDialog() | Out-Null
+    $installLocation = $OpenFileDialog.filename | Split-Path -Parent
     $default = @"
 <?xml version="1.0"?>
 <preferences>
-    <Location>$scriptPath</Location>
+    <Location>$installLocation</Location>
     <MaxAttempts>3</MaxAttempts>
 </preferences>
 "@
     $default | Out-File -FilePath $scriptPath\Launch-Kol.pref -NoClobber
+}
+
+if (-not (Test-Path $scriptPath\Launch-Kol.pref)) {
+    Initialize-Installtion
 }
 $preferences = [xml](Get-Content $scriptPath\Launch-Kol.pref)
 $installLocation = $preferences.preferences.Location.Trim()
@@ -97,15 +108,17 @@ try {
     #Get Current local build
     if ((-not $exists) -or ($current.Name -ne $latest) -or ($localFingerprint -ne $cannonicalFingerprint)) {
         #If the current local build does not match the latest build, remove local build and download latest
-        Invoke-WebRequest $jarURI -OutFile ".\$latest"
+        #Invoke-WebRequest $jarURI -OutFile ".\$latest"
+        Start-BitsTransfer -Source $jarURI -Destination ".\$latest" -Priority Foreground
         $attempts = 1
         $localFingerprint = (Get-FileHash ".\$latest" -Algorithm MD5).Hash.ToLower()
         while (($cannonicalFingerprint -ne $localFingerprint) -and ($attempts -le $maxAttempts)) {
             Remove-Item ".\$latest"
-            Invoke-WebRequest $jarURI -OutFile ".\$latest"
+            #Invoke-WebRequest $jarURI -OutFile ".\$latest"
+            Start-BitsTransfer -Source $jarURI -Destination ".\$latest" -Priority Foreground
             $attempts++
         }
-        if ($current.Name -ne '1') {
+        if ($exists) {
             Remove-Item $current.FullName
         }
     }
