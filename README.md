@@ -2,7 +2,12 @@
 A Windows launcher and auto-updater for the .jar version of KoLMafia
 
 Usage:
-Edit the Location tag within Launch-KoL.pref to point to the location of your KoL jar file
-Then run the ps1 file
+Binary Installer: Run installer, run Launch KoLMafia from Start Menu
 
-Use Compile-Launcher.ps1 to compile Launch-KoL.ps1 into Launch-KoL.exe.  Optionally, have a file called app_icon64.ico in the working directory to incorporate the icon file into the compiled executable.
+Manually Installed Binary: Run Launch-KoL.exe, provide location of KoLMafia JAR file (First run only)
+
+PowerShell Script: Run script, provide location of KoLMafia JAR file (first run only)
+
+Requirements:
+Binary requires .NET 4.6.2
+PS1 requires PowerShell 3.0
