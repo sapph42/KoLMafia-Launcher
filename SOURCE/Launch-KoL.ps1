@@ -1,6 +1,4 @@
 ﻿Add-Type -AssemblyName 'System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'
-$scriptPath = $PSScriptRoot
-
 Function Initialize-Installtion {
     $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
     $OpenFileDialog.initialDirectory = $scriptPath
@@ -16,22 +14,6 @@ Function Initialize-Installtion {
 </preferences>
 "@
     $default | Out-File -FilePath $scriptPath\Launch-Kol.pref -NoClobber
-}
-
-if (-not (Test-Path $scriptPath\Launch-Kol.pref)) {
-    Initialize-Installtion
-}
-$preferences = [xml](Get-Content $scriptPath\Launch-Kol.pref)
-$installLocation = $preferences.preferences.Location.Trim()
-try {
-    $maxAttempts = $preferences.preferences.MaxAttempts.Trim()
-} catch {
-    $maxAttempts = 3
-    $preferences.preferences.AppendChild($preferences.CreateElement("MaxAttempts"))
-    $preferences.Save("$scriptPath\Launch-Kol.pref")
-}
-if ($installLocation -match 'InsertYourKolPath') {
-    $installLocation = $scriptPath
 }
 
 Function Get-ShellOpenFromExtention {
@@ -65,6 +47,61 @@ Function Get-ShellOpenFromExtention {
     end {
         return $null
     }
+}
+Function Get-WebFile {
+    [CmdletBinding()]
+    [OutputType([boolean])]
+    param (
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$URI,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Destination,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [ValidateSet('Foreground','High','Medium','Low')]
+        [string]$Priority,
+
+        [Parameter(Mandatory, ParameterSetName='Fingerprint')]
+        [ValidateNotNullOrEmpty()]
+        [string]$Fingerprint,
+
+        [Parameter(Mandatory, ParameterSetName='Fingerprint')]
+        [ValidateNotNullOrEmpty()]
+        [ValidateSet('SHA1','SHA256','SHA384','SHA512','MD5')]
+        [string]$Algorithm
+    )
+    Start-BitsTransfer -Source $URI -Destination $Destination -Priority $Priority
+    If ($PSBoundParameters.ContainsKey('Fingerprint')) {
+        $TargetHash = (Get-FileHash $Destination -Algorithm $Algorithm).Hash.ToLower()
+        if ($TargetHash -eq $Fingerprint) {
+            return $true
+        } else {
+            return $false
+        }
+    } else {
+        return $true
+    }
+}
+
+$scriptPath = $PSScriptRoot
+if (-not (Test-Path $scriptPath\Launch-Kol.pref)) {
+    Initialize-Installtion
+}
+$preferences = [xml](Get-Content $scriptPath\Launch-Kol.pref)
+$installLocation = $preferences.preferences.Location.Trim()
+try {
+    $maxAttempts = $preferences.preferences.MaxAttempts.Trim()
+} catch {
+    $maxAttempts = 3
+    $preferences.preferences.AppendChild($preferences.CreateElement("MaxAttempts"))
+    $preferences.Save("$scriptPath\Launch-Kol.pref")
+}
+if ($installLocation -match 'InsertYourKolPath') {
+    $installLocation = $scriptPath
 }
 
 #Get Registered Application for jar files
@@ -108,24 +145,19 @@ try {
     #Get Current local build
     if ((-not $exists) -or ($current.Name -ne $latest) -or ($localFingerprint -ne $cannonicalFingerprint)) {
         #If the current local build does not match the latest build, remove local build and download latest
-        #Invoke-WebRequest $jarURI -OutFile ".\$latest"
-        Start-BitsTransfer -Source $jarURI -Destination ".\$latest" -Priority Foreground
         $attempts = 1
-        $localFingerprint = (Get-FileHash ".\$latest" -Algorithm MD5).Hash.ToLower()
-        while (($cannonicalFingerprint -ne $localFingerprint) -and ($attempts -le $maxAttempts)) {
+        $downloadSuccess = Get-WebFile -URI $jarURI -Destination ".\$latest" -Priority Foreground -Fingerprint $cannonicalFingerprint -Algorithm MD5
+        while ((-not $downloadSuccess) -and ($attempts -le $maxAttempts)) {
             Remove-Item ".\$latest"
-            #Invoke-WebRequest $jarURI -OutFile ".\$latest"
-            Start-BitsTransfer -Source $jarURI -Destination ".\$latest" -Priority Foreground
+            $downloadSuccess = Get-WebFile -URI $jarURI -Destination ".\$latest" -Priority Foreground -Fingerprint $cannonicalFingerprint -Algorithm MD5
             $attempts++
         }
-        if ($exists) {
+        if ($exists -and $downloadSuccess) {
             Remove-Item $current.FullName
         }
     }
 } catch {
-    $StatusCode = $_.Exception.Response.StatusCode.value__
-    $StatusDescription = $_.Exception.Response.StatusDescription
-    [System.Windows.Forms.MessageBox]::Show("Received a $StatusCode ($StatusDescription) error when attempting to retreive the latest version.")
+    [System.Windows.Forms.MessageBox]::Show("Received a error when attempting to retreive and/or save the latest version. Your previous version has been kept, and will now be run.")
     $latest = $current
 } finally {
     #Note: In theory Invoke-Item .\$latest should suffice.  However, doing this seems to load KoL without settings data.  So we do it the hard way
