@@ -151,15 +151,22 @@ if ($null -eq $OpenCommand) {
 if ($killOnUpdate) {
     Get-Process javaw | Stop-Process -Force
 }
+
+$msg = 'A javaw.exe process has been detected. For safety, update cannot continue without killing this process.'
+$title = 'Java Interpreter Already Running'
+$buttons = [System.Windows.Forms.MessageBoxButtons]::OKCancel
+$cancelbutton = [System.Windows.Forms.DialogResult]::Cancel
+$icon = [System.Windows.Forms.MessageBoxIcon]::Warning
+$default = [System.Windows.Forms.MessageBoxDefaultButton]::Button2
+$options = 0
 if (Get-Process javaw) {
     if ($killOnUpdate) {
         Get-Process javaw | Stop-Process -Force
     } elseif ($Silent) {
         EXIT 1
     } else {
-        $message = "A javaw.exe process has been detected. For safety, update cannot continue without killing this process."
-        $answer = [System.Windows.Forms.MessageBox]::Show($message,"Java Interpreter Already Running",[System.Windows.Forms.MessageBoxButtons]::OKCancel,[System.Windows.Forms.MessageBoxIcon]::Warning,[System.Windows.Forms.MessageBoxDefaultButton]::Button2,0)
-        if ($answer -eq [System.Windows.Forms.DialogResult]::Cancel) {
+        $answer = [System.Windows.Forms.MessageBox]::Show($msg,$title,$buttons,$icon,$default,$options)
+        if ($answer -eq $cancelbutton) {
             EXIT 1
         } else {
             Get-Process javaw | Stop-Process -Force
@@ -171,6 +178,13 @@ if (Get-Process javaw) {
 $base = "https://builds.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/artifact/dist/"
 Set-Location $installLocation
 $current = Get-ChildItem .\*.jar
+$msg = "No jar file found in the provided folder. Download latest mafia to $($installLocation)?"
+$title = 'Mafia Not Found!'
+$buttons = [System.Windows.Forms.MessageBoxButtons]::YesNo
+$nobutton = [System.Windows.Forms.DialogResult]::No
+$icon = [System.Windows.Forms.MessageBoxIcon]::Question
+$default = [System.Windows.Forms.MessageBoxDefaultButton]::Button1
+$options = 0
 if ($current.count -gt 1) {
     $current | Sort-Object -Property Name | Select-Object -First 1 | Remove-Item
     $current = $current | Sort-Object -Property Name -Descending | Select-Object -First 1
@@ -178,8 +192,7 @@ if ($current.count -gt 1) {
     $localFingerprint = (Get-FileHashLocal -Path $current -Algorithm MD5).ToLower()
 } elseif ($current.Count -eq 0) {
     if (-not $Silent) {
-        $message = "No jar file found in the provided folder. Download latest mafia to $($installLocation)?"
-        $answer = [System.Windows.Forms.MessageBox]::Show($message,"Mafia Not Found!",[System.Windows.Forms.MessageBoxButtons]::YesNo,[System.Windows.Forms.MessageBoxIcon]::Question,[System.Windows.Forms.MessageBoxDefaultButton]::Button1,0)
+        $answer = [System.Windows.Forms.MessageBox]::Show($msg,$title,$buttons,$icon,$default,$options)
         if ($answer -eq [System.Windows.Forms.DialogResult]::No) {
             exit
         } else {
