@@ -1,4 +1,10 @@
-﻿Add-Type -AssemblyName 'System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'
+﻿param(
+    [switch]$noLaunch = $false,
+    [switch]$killOnUpdate = $false,
+    [switch]$Silent = $false
+)
+
+Add-Type -AssemblyName 'System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'
 Function Initialize-Installtion {
     $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
     $OpenFileDialog.initialDirectory = $scriptPath
@@ -76,7 +82,7 @@ Function Get-WebFile {
     )
     Start-BitsTransfer -Source $URI -Destination $Destination -Priority $Priority
     If ($PSBoundParameters.ContainsKey('Fingerprint')) {
-        $TargetHash = (Get-FileHash $Destination -Algorithm $Algorithm).Hash.ToLower()
+        $TargetHash = (Get-FileHashLocal -Path $Destination -Algorithm $Algorithm).ToLower()
         if ($TargetHash -eq $Fingerprint) {
             return $true
         } else {
@@ -87,9 +93,37 @@ Function Get-WebFile {
     }
 }
 
+Function Get-FileHashLocal {
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Path,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [ValidateSet('SHA1','SHA256','SHA384','SHA512','MD5')]
+        [string]$Algorithm        
+    )
+
+    if (Get-Command Get-FileHash -ErrorAction SilentlyContinue) {
+        return (Get-FileHash -Path $Path -Algorithm $Algorithm).Hash
+    } else {
+        $FileStream = New-Object System.IO.FileStream($Path, [System.IO.FileMode]::Open)
+        $StringBuilder = New-Object System.Text.StringBuilder
+        [System.Security.Cryptography.HashAlgorithm]::Create($Algorithm).ComputeHash($FileStream) | ForEach-Object {[Void]$StringBuilder.Append($_.ToString("x2"))}
+        $FileStream.Close()
+        return $StringBuilder.ToString()
+    }
+}
+
 $scriptPath = $PSScriptRoot
 if (-not (Test-Path $scriptPath\Launch-Kol.pref)) {
-    Initialize-Installtion
+    if (-not $Silent) {
+        Initialize-Installtion
+    } else {
+        EXIT 1
+    }
 }
 $preferences = [xml](Get-Content $scriptPath\Launch-Kol.pref)
 $installLocation = $preferences.preferences.Location.Trim()
@@ -114,6 +148,25 @@ if ($null -eq $OpenCommand) {
     $javaPath = $OpenCommand.appPath
     $params = $OpenCommand.arguments
 }
+if ($killOnUpdate) {
+    Get-Process javaw | Stop-Process -Force
+}
+if (Get-Process javaw) {
+    if ($killOnUpdate) {
+        Get-Process javaw | Stop-Process -Force
+    } elseif ($Silent) {
+        EXIT 1
+    } else {
+        $message = "A javaw.exe process has been detected. For safety, update cannot continue without killing this process."
+        $answer = [System.Windows.Forms.MessageBox]::Show($message,"Java Interpreter Already Running",[System.Windows.Forms.MessageBoxButtons]::OKCancel,[System.Windows.Forms.MessageBoxIcon]::Warning,[System.Windows.Forms.MessageBoxDefaultButton]::Button2,0)
+        if ($answer -eq [System.Windows.Forms.DialogResult]::Cancel) {
+            EXIT 1
+        } else {
+            Get-Process javaw | Stop-Process -Force
+        }
+    }
+}
+
 #Check kolmafia for name of latest build
 $base = "https://builds.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/artifact/dist/"
 Set-Location $installLocation
@@ -122,18 +175,22 @@ if ($current.count -gt 1) {
     $current | Sort-Object -Property Name | Select-Object -First 1 | Remove-Item
     $current = $current | Sort-Object -Property Name -Descending | Select-Object -First 1
     $exists = $true
-    $localFingerprint = (Get-FileHash $current -Algorithm MD5).Hash.ToLower()
+    $localFingerprint = (Get-FileHashLocal -Path $current -Algorithm MD5).ToLower()
 } elseif ($current.Count -eq 0) {
-    $message = "No jar file found in the provided folder. Download latest mafia to $($installLocation)?"
-    $answer = [System.Windows.Forms.MessageBox]::Show($message,"Mafia Not Found!",[System.Windows.Forms.MessageBoxButtons]::YesNo,[System.Windows.Forms.MessageBoxIcon]::Question,[System.Windows.Forms.MessageBoxDefaultButton]::Button1,0)
-    if ($answer -eq [System.Windows.Forms.DialogResult]::No) {
-        exit
+    if (-not $Silent) {
+        $message = "No jar file found in the provided folder. Download latest mafia to $($installLocation)?"
+        $answer = [System.Windows.Forms.MessageBox]::Show($message,"Mafia Not Found!",[System.Windows.Forms.MessageBoxButtons]::YesNo,[System.Windows.Forms.MessageBoxIcon]::Question,[System.Windows.Forms.MessageBoxDefaultButton]::Button1,0)
+        if ($answer -eq [System.Windows.Forms.DialogResult]::No) {
+            exit
+        } else {
+            $exists = $false
+        }
     } else {
         $exists = $false
-    }
+    } 
 } else {
     $exists = $true
-    $localFingerprint = (Get-FileHash $current -Algorithm MD5).Hash.ToLower()
+    $localFingerprint = (Get-FileHashLocal -Path $current -Algorithm MD5).ToLower()
 }
 try {
     $response = Invoke-WebRequest $base
@@ -157,9 +214,13 @@ try {
         }
     }
 } catch {
-    [System.Windows.Forms.MessageBox]::Show("Received a error when attempting to retreive and/or save the latest version. Your previous version has been kept, and will now be run.")
+    if (-not $Silent) {
+        [System.Windows.Forms.MessageBox]::Show("Received a error when attempting to retreive and/or save the latest version. Your previous version has been kept, and will now be run.")
+    }
     $latest = $current
 } finally {
     #Note: In theory Invoke-Item .\$latest should suffice.  However, doing this seems to load KoL without settings data.  So we do it the hard way
-    Start-Process -FilePath $javaPath -ArgumentList $params.Replace("%1", ".\$latest")
+    if (-not $noLaunch) {
+        Start-Process -FilePath $javaPath -ArgumentList $params.Replace("%1", ".\$latest")
+    }
 }
