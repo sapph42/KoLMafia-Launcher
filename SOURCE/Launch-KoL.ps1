@@ -5,21 +5,91 @@
 )
 
 Add-Type -AssemblyName 'System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'
-Function Initialize-Installtion {
-    $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
-    $OpenFileDialog.initialDirectory = $scriptPath
-    $OpenFileDialog.filter = “JAR files (*.jar)| *.jar”
-    $OpenFileDialog.Title = "Select Location of KolMafia JAR"
-    $OpenFileDialog.ShowDialog() | Out-Null
-    $installLocation = $OpenFileDialog.filename | Split-Path -Parent
-    $default = @"
+class Preferences {
+    hidden [string]$_PrefPath
+    hidden [string]$_installLocation
+    hidden [int]$_maxAttempts
+    hidden [boolean]$_silent
+
+    Preferences(
+        [string]$p
+    ){
+        $this._PrefPath = $p
+        If (-not (Test-Path $p\Launch-Kol.pref)) {
+            [preferences]::InitPref($p)
+        }
+        $this.LoadVals()
+    }
+
+    Preferences (
+        [string]$p,
+        [boolean]$s
+    ){
+        If (-not (Test-Path $p\Launch-Kol.pref) -and $s) {
+            throw "No pref file found, silence precludes requesting install location"
+        } elseif (-not (Test-Path $p\Launch-Kol.pref) -and -not $s) {
+            [preferences]::InitPref($p)
+        }
+        $this._silent = $s
+        $this._PrefPath = $p
+        $this.LoadVals()
+    }
+
+    hidden static [void]InitPref([string]$p){
+        $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
+        $OpenFileDialog.initialDirectory = $p
+        $OpenFileDialog.filter = “JAR files (*.jar)| *.jar”
+        $OpenFileDialog.Title = "Select Location of KolMafia JAR"
+        $OpenFileDialog.ShowDialog() | Out-Null
+        $installLocation = $OpenFileDialog.filename | Split-Path -Parent
+        $default = @"
 <?xml version="1.0"?>
 <preferences>
     <Location>$installLocation</Location>
     <MaxAttempts>3</MaxAttempts>
 </preferences>
 "@
-    $default | Out-File -FilePath $scriptPath\Launch-Kol.pref -NoClobber
+        $default | Out-File -FilePath $p\Launch-Kol.pref -NoClobber
+    }
+
+    hidden [void]LoadVals(){
+        $prefFile = "$($this._PrefPath)\Launch-Kol.pref"
+        If (-not (Test-Path $prefFile)) {
+            [preferences]::InitPref($this._PrefPath)
+        }
+        $prefs = [xml](Get-Content $prefFile)
+        $this._installLocation = $prefs.preferences.Location.Trim()
+        try {
+            $this._maxAttempts = $prefs.preferences.MaxAttempts.Trim()
+        } catch {
+            $this.SetMaxAttempts(3)
+        }
+    }
+
+    [string]GetLocation(){
+        return $this._installLocation
+    }
+
+    [void]SetLocation([string]$p){
+        $prefs = [xml](Get-Content "$($this._PrefPath)\Launch-Kol.pref")
+        $prefs.preferences.Location = $p
+        $prefs.Save("$($this._PrefPath)\Launch-Kol.pref")
+    }
+
+    [int]GetMaxAttempts(){
+        return $this._maxAttempts
+    }
+
+    [void]SetMaxAttempts([int]$m){
+        $prefs = [xml](Get-Content "$($this._PrefPath)\Launch-Kol.pref")
+        try {
+            $prefs.preferences.MaxAttempts = [string]$m
+        } catch {
+            $prefs.preferences.AppendChild($prefs.CreateElement('MaxAttempts'))
+            $prefs.preferences.MaxAttempts = [string]$m
+        }
+        $prefs.Save("$($this._PrefPath)\Launch-Kol.pref")
+    }
 }
 
 Function Get-ShellOpenFromExtention {
@@ -118,24 +188,12 @@ Function Get-FileHashLocal {
 }
 
 $scriptPath = $PSScriptRoot
-if (-not (Test-Path $scriptPath\Launch-Kol.pref)) {
-    if (-not $Silent) {
-        Initialize-Installtion
-    } else {
-        EXIT 1
-    }
-}
-$preferences = [xml](Get-Content $scriptPath\Launch-Kol.pref)
-$installLocation = $preferences.preferences.Location.Trim()
-try {
-    $maxAttempts = $preferences.preferences.MaxAttempts.Trim()
-} catch {
-    $maxAttempts = 3
-    $preferences.preferences.AppendChild($preferences.CreateElement("MaxAttempts"))
-    $preferences.Save("$scriptPath\Launch-Kol.pref")
-}
+$preferences = [preferences]::new($scriptPath,$Silent) 
+$installLocation = $preferences.GetLocation()
+$maxAttempts = $preferences.GetMaxAttempts()
 if ($installLocation -match 'InsertYourKolPath') {
     $installLocation = $scriptPath
+    $preferences.SetLocation($scriptPath)
 }
 
 #Get Registered Application for jar files
@@ -159,7 +217,7 @@ $cancelbutton = [System.Windows.Forms.DialogResult]::Cancel
 $icon = [System.Windows.Forms.MessageBoxIcon]::Warning
 $default = [System.Windows.Forms.MessageBoxDefaultButton]::Button2
 $options = 0
-if (Get-Process javaw) {
+if (Get-Process javaw -ErrorAction SilentlyContinue) {
     if ($killOnUpdate) {
         Get-Process javaw | Stop-Process -Force
     } elseif ($Silent) {
