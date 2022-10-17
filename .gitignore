@@ -1,6 +1,7 @@
 *.psd1
 *.pref
 *.code-workspace
-*.ico
 *.pfx
 *.lnk
+*.xml
+*.msi

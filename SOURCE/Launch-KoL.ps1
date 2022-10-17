@@ -251,7 +251,7 @@ if ($current.count -gt 1) {
 } elseif ($current.Count -eq 0) {
     if (-not $Silent) {
         $answer = [System.Windows.Forms.MessageBox]::Show($msg,$title,$buttons,$icon,$default,$options)
-        if ($answer -eq [System.Windows.Forms.DialogResult]::No) {
+        if ($answer -eq $nobutton) {
             exit
         } else {
             $exists = $false
