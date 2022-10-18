@@ -10,6 +10,7 @@ class Preferences {
     hidden [string]$_installLocation
     hidden [int]$_maxAttempts
     hidden [boolean]$_silent
+    hidden [string]$_skippedVersion
 
     Preferences(
         [string]$p
@@ -70,8 +71,15 @@ class Preferences {
             $installLocation = $OpenFileDialog.filename | Split-Path -Parent
             New-ItemProperty -Path $p -Name 'PathToKoL' -Value $installLocation -PropertyType String
         }
-        if (-not (Get-ItemPropertyValue -Path $p -Name MaxDownloadAttempts -ErrorAction SilentlyContinue)) {
+        try {
+            Get-ItemPropertyValue -Path $p -Name MaxDownloadAttempts | Out-Null
+        } catch {
             New-ItemProperty -Path $p -Name 'MaxDownloadAttempts' -Value 3 -PropertyType Dword
+        }
+        try {
+            Get-ItemPropertyValue -Path $p -Name SkippedVersion | Out-Null
+        } catch {
+            New-ItemProperty -Path $p -Name 'SkippedVersion' -Value '' -PropertyType String
         }
     }
 
@@ -81,6 +89,13 @@ class Preferences {
         }
         $this._installLocation = Get-ItemPropertyValue -Path $this._PrefPath -Name PathToKoL
         $this._maxAttempts = Get-ItemPropertyValue -Path $this._PrefPath -Name MaxDownloadAttempts
+        try {
+            Get-ItemPropertyValue -Path $this._PrefPath -Name SkippedVersion | Out-Null
+        } catch {
+            New-ItemProperty -Path $this._PrefPath -Name 'SkippedVersion' -Value '' -PropertyType String
+        } finally {
+            $this._skippedVersion = Get-ItemPropertyValue -Path $this._PrefPath -Name SkippedVersion
+        }
     }
 
     [string]GetLocation(){
@@ -99,6 +114,15 @@ class Preferences {
     [void]SetMaxAttempts([int]$m){
         Set-ItemProperty -Path $this._PrefPath -Name MaxDownloadAttempts -Value $m
         $this._maxAttempts = $m
+    }
+
+    [string]GetSkippedVersion(){
+        return $this._skippedVersion
+    }
+
+    [void]SetSkippedVersion([string]$v){
+        Set-ItemProperty -Path $this._PrefPath -Name SkippedVersion -Value $v
+        $this._skippedVersion = $v
     }
 }
 
@@ -158,7 +182,10 @@ Function Get-WebFile {
         [Parameter(Mandatory, ParameterSetName='Fingerprint')]
         [ValidateNotNullOrEmpty()]
         [ValidateSet('SHA1','SHA256','SHA384','SHA512','MD5')]
-        [string]$Algorithm
+        [string]$Algorithm,
+
+        [Parameter(Mandatory, ParameterSetName='NoFingerprint')]
+        [switch]$NoFingerPrint
     )
     Start-BitsTransfer -Source $URI -Destination $Destination -Priority $Priority
     If ($PSBoundParameters.ContainsKey('Fingerprint')) {
@@ -197,9 +224,59 @@ Function Get-FileHashLocal {
     }
 }
 
+Function CheckForUpdate() {
+    param(
+        [string]$SkippedVersion
+    )
+    $caller = (Get-Process -Id $pid).Path
+    $localVer = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($caller).FileVersion
+    $repo = Invoke-WebRequest https://github.com/sapph42/KoLMafia-Launcher
+    $pattern = '(?:Release\s)(?<ver>\d+\.\d+\.\d+)'
+    $releaseVer = $repo.ToString() -split "[`r`n]" | select-string -pattern $pattern
+    if ($null -ne $releaseVer) {
+        $releaseVer -match $pattern | Out-Null
+        $releaseVer = $Matches.ver
+    } else {
+        return $null
+    }
+    if ($releaseVer -eq $SkippedVersion) {
+        return $null
+    }
+    if ($localVer -ne $releaseVer) {
+        $msg = "An updated version ($($releaseVer)) of KoLMafia Launcher is available! Update now? (Or skip this release?)"
+        $title = 'Update available!'
+        $buttons = [System.Windows.Forms.MessageBoxButtons]::YesNo
+        $nobutton = [System.Windows.Forms.DialogResult]::No
+        $icon = [System.Windows.Forms.MessageBoxIcon]::Question
+        $default = [System.Windows.Forms.MessageBoxDefaultButton]::Button1
+        $options = 0
+        $answer = [System.Windows.Forms.MessageBox]::Show($msg,$title,$buttons,$icon,$default,$options)
+        if ($answer -eq $nobutton) {
+            return $releaseVer
+        }
+        $pattern = '(?:\>)(?<file>KoLMafia-Launcher_.*\.exe)(?:\<)'
+        ($repo.ToString() -split "[`r`n]" | select-string -pattern $pattern) -match $pattern | Out-Null
+        $targetInstallerName = $Matches.file
+        $sourceURI = "https://github.com/sapph42/KoLMafia-Launcher/raw/main/$($targetInstallerName)"
+        $destination = "$($env:TEMP)\$($targetInstallerName)"
+        Get-WebFile -URI $sourceURI -Destination $destination -Priority Foreground -NoFingerPrint | Out-Null
+        Start-Process $destination -Verb RunAs
+        EXIT 0
+        return $null
+    } else {
+        return $null
+    }
+}
+
 $preferences = [preferences]::new('HKCU:\Software\Sapph Tools\KoLMafia Launcher\',$Silent) 
 $installLocation = $preferences.GetLocation()
 $maxAttempts = $preferences.GetMaxAttempts()
+$skippedVersion = $preferences.GetSkippedVersion()
+
+$retVal = CheckForUpdate -SkippedVersion $skippedVersion
+if ($null -ne $retVal) {
+    $preferences.SetSkippedVersion($retVal)
+}
 
 #Get Registered Application for jar files
 $OpenCommand = Get-ShellOpenFromExtention -Extension '.jar'
