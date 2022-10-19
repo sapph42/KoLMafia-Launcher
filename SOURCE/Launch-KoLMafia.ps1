@@ -50,8 +50,8 @@ class Preferences {
     }
 
     hidden static [void]InitPref([string]$p){
-        if (-not 
-                (Test-Path $p) -and -not 
+        if (-not
+                (Test-Path $p) -and -not
                 (Test-Path ($p | Split-Path))
         ) {
             New-Item ($p | Split-Path)
@@ -59,7 +59,7 @@ class Preferences {
         if (-not (Test-Path $p)) {
             New-Item $p
         }
-        if (-not 
+        if (-not
             (Get-ItemPropertyValue -Path $p -Name PathToKoL -ErrorAction SilentlyContinue) -and
             [string]::IsNullOrEmpty((Get-ItemPropertyValue -Path $p -Name PathToKoL -ErrorAction SilentlyContinue))
         ) {
@@ -210,7 +210,7 @@ Function Get-FileHashLocal {
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
         [ValidateSet('SHA1','SHA256','SHA384','SHA512','MD5')]
-        [string]$Algorithm        
+        [string]$Algorithm
     )
 
     if (Get-Command Get-FileHash -ErrorAction SilentlyContinue) {
@@ -228,15 +228,21 @@ Function CheckForUpdate() {
     param(
         [string]$SkippedVersion
     )
-    $caller = (Get-Process -Id $pid).Path
-    $localVer = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($caller).FileVersion
-    $repo = Invoke-WebRequest https://github.com/sapph42/KoLMafia-Launcher
-    $pattern = '(?:Release\s)(?<ver>\d+\.\d+\.\d+)'
-    $releaseVer = $repo.ToString() -split "[`r`n]" | select-string -pattern $pattern
-    if ($null -ne $releaseVer) {
-        $releaseVer -match $pattern | Out-Null
-        $releaseVer = $Matches.ver
-    } else {
+    try {
+        $Parameters = @{
+            Path = 'HKLM:\SOFTWARE\WOW6432Node\Sapph Tools\KoLMafia Launcher'
+            Name = 'Version'
+        }
+        $localVer = Get-ItemPropertyValue @Parameters
+    } catch {
+        $caller = (Get-Process -Id $pid).Path
+        $localVer = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($caller).FileVersion    
+    }
+    try {
+        $releaseVer = (Invoke-WebRequest `
+            https://raw.githubusercontent.com/sapph42/KoLMafia-Launcher/main/version.txt
+        ).ToString().Trim()
+    } catch {
         return $null
     }
     if ($releaseVer -eq $SkippedVersion) {
@@ -254,29 +260,32 @@ Function CheckForUpdate() {
         if ($answer -eq $nobutton) {
             return $releaseVer
         }
-        $pattern = '(?:\>)(?<file>KoLMafia-Launcher_.*\.exe)(?:\<)'
-        ($repo.ToString() -split "[`r`n]" | select-string -pattern $pattern) -match $pattern | Out-Null
-        $targetInstallerName = $Matches.file
-        $sourceURI = "https://github.com/sapph42/KoLMafia-Launcher/raw/main/$($targetInstallerName)"
+        $sourceURI = "https://github.com/sapph42/KoLMafia-Launcher/raw/main/KoLMafia-Launcher_$($releaseVer).exe"
         $destination = "$($env:TEMP)\$($targetInstallerName)"
-        Get-WebFile -URI $sourceURI -Destination $destination -Priority Foreground -NoFingerPrint | Out-Null
-        Start-Process $destination -Verb RunAs
-        EXIT 0
+        try {
+            Get-WebFile -URI $sourceURI -Destination $destination -Priority Foreground -NoFingerPrint | Out-Null
+            Start-Process $destination -Verb RunAs
+            EXIT 0
+        } catch {
+        }
         return $null
     } else {
         return $null
     }
 }
 
-$preferences = [preferences]::new('HKCU:\Software\Sapph Tools\KoLMafia Launcher\',$Silent) 
+$preferences = [preferences]::new('HKCU:\Software\Sapph Tools\KoLMafia Launcher\',$Silent)
 $installLocation = $preferences.GetLocation()
 $maxAttempts = $preferences.GetMaxAttempts()
 $skippedVersion = $preferences.GetSkippedVersion()
 
-$retVal = CheckForUpdate -SkippedVersion $skippedVersion
-if ($null -ne $retVal) {
-    $preferences.SetSkippedVersion($retVal)
+if (-not $Silent) {
+    $retVal = CheckForUpdate -SkippedVersion $skippedVersion
+    if ($null -ne $retVal) {
+        $preferences.SetSkippedVersion($retVal)
+    }
 }
+
 
 #Get Registered Application for jar files
 $OpenCommand = Get-ShellOpenFromExtention -Extension '.jar'
@@ -340,7 +349,7 @@ if ($current.count -gt 1) {
         }
     } else {
         $exists = $false
-    } 
+    }
 } else {
     $exists = $true
     $localFingerprint = (Get-FileHashLocal -Path $current -Algorithm MD5).ToLower()
