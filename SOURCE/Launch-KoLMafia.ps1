@@ -1,7 +1,8 @@
 ﻿param(
     [switch]$noLaunch = $false,
     [switch]$killOnUpdate = $false,
-    [switch]$Silent = $false
+    [switch]$Silent = $false,
+    [switch]$Verbose
 )
 
 Add-Type -AssemblyName 'System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'
@@ -55,9 +56,12 @@ class Preferences {
                 (Test-Path ($p | Split-Path))
         ) {
             New-Item ($p | Split-Path)
+            Write-Verbose "Creating key at $($p | Split-Path)"
+            
         }
         if (-not (Test-Path $p)) {
             New-Item $p
+            Write-Verbose "Creating key at $p"
         }
         if (-not
             (Get-ItemPropertyValue -Path $p -Name PathToKoL -ErrorAction SilentlyContinue) -and
@@ -70,16 +74,19 @@ class Preferences {
             $OpenFileDialog.ShowDialog() | Out-Null
             $installLocation = $OpenFileDialog.filename | Split-Path -Parent
             New-ItemProperty -Path $p -Name 'PathToKoL' -Value $installLocation -PropertyType String
+            Write-Verbose "Creating value PathToKoL at $p"
         }
         try {
             Get-ItemPropertyValue -Path $p -Name MaxDownloadAttempts | Out-Null
         } catch {
             New-ItemProperty -Path $p -Name 'MaxDownloadAttempts' -Value 3 -PropertyType Dword
+            Write-Verbose "Creating value MaxDownloadAttempts at $p"
         }
         try {
             Get-ItemPropertyValue -Path $p -Name SkippedVersion | Out-Null
         } catch {
             New-ItemProperty -Path $p -Name 'SkippedVersion' -Value '' -PropertyType String
+            Write-Verbose "Creating value SkippedVersion at $p"
         }
     }
 
@@ -93,6 +100,7 @@ class Preferences {
             Get-ItemPropertyValue -Path $this._PrefPath -Name SkippedVersion | Out-Null
         } catch {
             New-ItemProperty -Path $this._PrefPath -Name 'SkippedVersion' -Value '' -PropertyType String
+            Write-Verbose "Creating value SkippedVersion at $($this._PrefPath)"
         } finally {
             $this._skippedVersion = Get-ItemPropertyValue -Path $this._PrefPath -Name SkippedVersion
         }
@@ -188,6 +196,7 @@ Function Get-WebFile {
         [switch]$NoFingerPrint
     )
     Start-BitsTransfer -Source $URI -Destination $Destination -Priority $Priority
+    Write-Verbose "Fetching file $URI"
     If ($PSBoundParameters.ContainsKey('Fingerprint')) {
         $TargetHash = (Get-FileHashLocal -Path $Destination -Algorithm $Algorithm).ToLower()
         if ($TargetHash -eq $Fingerprint) {
@@ -213,6 +222,7 @@ Function Get-FileHashLocal {
         [string]$Algorithm
     )
 
+    Write-Verbose "Generating local hash"
     if (Get-Command Get-FileHash -ErrorAction SilentlyContinue) {
         return (Get-FileHash -Path $Path -Algorithm $Algorithm).Hash
     } else {
@@ -239,6 +249,7 @@ Function CheckForUpdate() {
         $localVer = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($caller).FileVersion    
     }
     try {
+        Write-Verbose "Fetching published release version"
         $releaseVer = (Invoke-WebRequest `
             https://raw.githubusercontent.com/sapph42/KoLMafia-Launcher/main/version.txt
         ).ToString().Trim()
@@ -246,9 +257,11 @@ Function CheckForUpdate() {
         return $null
     }
     if ($releaseVer -eq $SkippedVersion) {
+        Write-Verbose "Local version up-to-date"
         return $null
     }
     if ($localVer -ne $releaseVer) {
+        Write-Verbose "Version mismatch"
         $msg = "An updated version ($($releaseVer)) of KoLMafia Launcher is available! Update now? (Or skip this release?)"
         $title = 'Update available!'
         $buttons = [System.Windows.Forms.MessageBoxButtons]::YesNo
@@ -274,6 +287,9 @@ Function CheckForUpdate() {
     }
 }
 
+if ($Verbose) {
+    $VerbosePreference = "Continue"
+}
 $preferences = [preferences]::new('HKCU:\Software\Sapph Tools\KoLMafia Launcher\',$Silent)
 $installLocation = $preferences.GetLocation()
 $maxAttempts = $preferences.GetMaxAttempts()
@@ -282,6 +298,7 @@ $skippedVersion = $preferences.GetSkippedVersion()
 if (-not $Silent) {
     $retVal = CheckForUpdate -SkippedVersion $skippedVersion
     if ($null -ne $retVal) {
+        Write-Version "New release skipped"
         $preferences.SetSkippedVersion($retVal)
     }
 }
@@ -310,6 +327,7 @@ $default = [System.Windows.Forms.MessageBoxDefaultButton]::Button2
 $options = 0
 if (Get-Process javaw -ErrorAction SilentlyContinue) {
     if ($killOnUpdate) {
+        Write-Verbose "Checking for active Java process"
         Get-Process javaw | Stop-Process -Force
     } elseif ($Silent) {
         EXIT 1
@@ -361,6 +379,9 @@ try {
     $fingerprintURI = -join($jarURI, '/*fingerprint*/')
     $response = Invoke-WebRequest $fingerprintURI
     $cannonicalFingerprint = ($response.links | Select-Object href, innerText | Where-Object {$_.href -eq '/' -and $_.innerText -match '[a-z0-9]{32}'}).innerText
+    if ($null -eq $cannonicalFingerprint) {
+        $cannonicalFingerprint = ($response.AllElements | Where-Object {$_.tagName -eq 'LI' -and $_.class -eq 'jenkins-breadcrumbs__list-item' -and $_.innerText -match '[a-z0-9]{32}'}).innerText
+    }
     #Get Current local build
     if ((-not $exists) -or ($current.Name -ne $latest) -or ($localFingerprint -ne $cannonicalFingerprint)) {
         #If the current local build does not match the latest build, remove local build and download latest
@@ -383,6 +404,7 @@ try {
 } finally {
     #Note: In theory Invoke-Item .\$latest should suffice.  However, doing this seems to load KoL without settings data.  So we do it the hard way
     if (-not $noLaunch) {
+        Write-Verbose "Launching JAR"
         Start-Process -FilePath $javaPath -ArgumentList $params.Replace("%1", ".\$latest")
     }
 }
