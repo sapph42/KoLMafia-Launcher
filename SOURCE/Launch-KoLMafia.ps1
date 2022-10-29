@@ -273,7 +273,8 @@ Function CheckForUpdate() {
         if ($answer -eq $nobutton) {
             return $releaseVer
         }
-        $sourceURI = "https://github.com/sapph42/KoLMafia-Launcher/raw/main/KoLMafia-Launcher_$($releaseVer).exe"
+        $targetInstallerName = "KoLMafia-Launcher_$($releaseVer).exe"
+        $sourceURI = "https://github.com/sapph42/KoLMafia-Launcher/raw/main/$($targetInstallerName)"
         $destination = "$($env:TEMP)\$($targetInstallerName)"
         try {
             Get-WebFile -URI $sourceURI -Destination $destination -Priority Foreground -NoFingerPrint | Out-Null
