@@ -316,7 +316,7 @@ if ($null -eq $OpenCommand) {
     $params = $OpenCommand.arguments
 }
 if ($killOnUpdate) {
-    Get-Process javaw | Stop-Process -Force
+    Get-Process javaw -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 }
 
 $msg = 'A javaw.exe process has been detected. For safety, update cannot continue without killing this process.'
