@@ -1,19 +1,55 @@
-# KoLMafia-Launcher
-A Windows launcher and auto-updater for the .jar version of KoLMafia
+# KolMafia Launcher
 
-Legal Notice:
-icon.ico is a derivative artwork, based on IP owned in whole by Asymmetric Publications, LLC.  This derivative has been created with permission from Asymmetric Publications, LLC.  The author of KoLMafia-Launcher does not have the capacity to permit sub-derivative works, or to permit use of such work in other projects without authors of those projects obtaining express written consent of Asymmetric Publications, LLC.
+KolMafia Launcher is a launcher/updater for KoLMafia launcher.
 
-Translation:
-tptb were good enough to let me whip up an icon that incorporates their IP for use with this project.  That doesn't mean YOU can use the icon for your project (since it contains THEIR IP), or make your own art, based on this art (and honestly, why would you want to).  If you want to do something like that, just email them and ask yourself!
+## Features
 
-Usage:
-Binary Installer: Run installer, run Launch KoLMafia from Start Menu
+* Automatically determines the system-defined launcher for GUI-based JAR files, and uses that to launch KoLMafia
+* Checks for updated KoLMafia builds on launch and, if found, automatically downloads them
+* Allows the user to have a static shortcut for launching KoLMafia, even though the target name changes on a regular basis
+* Self-updating capability with user opt-out option
+* Optional installation of scheduled task that runs during rollover to potentially speed launch
+* Digitally signed source script, binary, and installer from Microsoft-trusted CA
 
-Manually Installed Binary: Run Launch-KoL.exe, provide location of KoLMafia JAR file (First run only)
+## Installation
 
-PowerShell Script: Run script, provide location of KoLMafia JAR file (first run only)
+### Binary
 
-Requirements:
-Binary requires .NET 4.6.2
-Binary and PS1 require PowerShell 3.0
+1. Download and run the KoLMafia-Launcher executable in the root of the repository or attached to the latest release
+
+### Source
+
+1. Download SOURCE\Launch-KoLMafia.ps1
+2. Run as-is, or use whatever methods you see fit to compile to executable
+
+## Usage
+
+* On first use, KoLMafia Launcher will request the location of your current KoLMafia installation
+* Thereafter, KoLMafia will use that location as its baseline for version checking, and download location for new versions
+
+### Command-line switches
+
+`-noLaunch`
+* Only runs update check, does not launch KolMafia
+
+`-killOnUpdate`
+* Checks for other instances of the system-defined launcher for GUI-based JAR files, and terminates them. Useful with the -Silent flag, as updating the JAR while it is running is not recommended
+
+`-Silent`
+* Prevents any error messages from appearing. Useful in conjunction with scheduled tasks
+
+`-Verbose`
+* Used for troubleshooting, outputs various messages to terminal
+
+## Legal Notice
+
+icon.ico is a derivative artwork, based on IP owned in whole by Asymmetric Publications, LLC. This derivative has been created with permission from Asymmetric Publications, LLC. The author of KoLMafia-Launcher does not have the capacity to permit sub-derivative works, or to permit use of such work in other projects without authors of those projects obtaining express written consent of Asymmetric Publications, LLC.
+
+### Translation
+
+tptb were good enough to let me whip up an icon that incorporates their IP for use with this project. That doesn't mean YOU can use the icon for your project (since it contains THEIR IP), or make your own art, based on this art (and honestly, why would you want to). If you want to do something like that, just email them and ask yourself!
+
+## Requirements
+
+* All versions require PowerShell 5.1 or higher.
+* Additionally, the binary requires .NET 4.6.2 or higher.
