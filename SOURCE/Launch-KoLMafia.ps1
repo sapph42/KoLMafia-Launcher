@@ -57,24 +57,56 @@ class Preferences {
         ) {
             New-Item ($p | Split-Path)
             Write-Verbose "Creating key at $($p | Split-Path)"
-            
         }
         if (-not (Test-Path $p)) {
             New-Item $p
             Write-Verbose "Creating key at $p"
         }
-        if (-not
-            (Get-ItemPropertyValue -Path $p -Name PathToKoL -ErrorAction SilentlyContinue) -and
-            [string]::IsNullOrEmpty((Get-ItemPropertyValue -Path $p -Name PathToKoL -ErrorAction SilentlyContinue))
-        ) {
+        try {
+            $needtoask = [string]::IsNullOrEmpty((Get-ItemPropertyValue -Path $p -Name PathToKoL -ErrorAction SilentlyContinue))
+        } catch {
+            $needtoask = $true
+        }
+        if ($needtoask) {
             $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
             $OpenFileDialog.initialDirectory = $env:USERPROFILE
             $OpenFileDialog.filter = “JAR files (*.jar)| *.jar”
             $OpenFileDialog.Title = "Select Location of KolMafia JAR"
             $OpenFileDialog.ShowDialog() | Out-Null
-            $installLocation = $OpenFileDialog.filename | Split-Path -Parent
-            New-ItemProperty -Path $p -Name 'PathToKoL' -Value $installLocation -PropertyType String
-            Write-Verbose "Creating value PathToKoL at $p"
+            $askfordir = [string]::IsNullOrEmpty($OpenFileDialog.FileName)
+            if (-not $askfordir) {
+                $installLocation = $OpenFileDialog.filename | Split-Path -Parent
+                New-ItemProperty -Path $p -Name 'PathToKoL' -Value $installLocation -PropertyType String
+                Write-Verbose "Creating value PathToKoL at $p"
+            }
+        } else {
+            $askfordir = $false
+        }
+        if ($askfordir) {
+            $msg = "No file was selected. Should Launcher assume you don't have KoLMafia installed and ask where you want it? (Selecting No will exit immediately)"
+            $title = 'No file selected'
+            $buttons = [System.Windows.Forms.MessageBoxButtons]::YesNo
+            $nobutton = [System.Windows.Forms.DialogResult]::No
+            $icon = [System.Windows.Forms.MessageBoxIcon]::Question
+            $default = [System.Windows.Forms.MessageBoxDefaultButton]::Button1
+            $options = 0
+            $answer = [System.Windows.Forms.MessageBox]::Show($msg,$title,$buttons,$icon,$default,$options)
+            if ($answer -eq $nobutton) {
+                EXIT 0
+            }  else {
+                $SelectFolderDialog = New-Object System.Windows.Forms.FolderBrowserDialog
+                $SelectFolderDialog.SelectedPath = $env:USERPROFILE
+                $SelectFolderDialog.Description = "Select where you want to install KoLMafia"
+                $SelectFolderDialog.ShowNewFolderButton = $true
+                $SelectFolderDialog.ShowDialog() | Out-Null
+                if ([string]::IsNullOrEmpty($SelectFolderDialog.SelectedPath)) {
+                    EXIT 0
+                } else {
+                    $installLocation = $SelectFolderDialog.SelectedPath
+                    New-ItemProperty -Path $p -Name 'PathToKoL' -Value $installLocation -PropertyType String
+                    Write-Verbose "Creating value PathToKoL at $p"
+                }
+            }
         }
         try {
             Get-ItemPropertyValue -Path $p -Name MaxDownloadAttempts | Out-Null
@@ -246,7 +278,7 @@ Function CheckForUpdate() {
         $localVer = Get-ItemPropertyValue @Parameters
     } catch {
         $caller = (Get-Process -Id $pid).Path
-        $localVer = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($caller).FileVersion    
+        $localVer = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($caller).FileVersion
     }
     try {
         Write-Verbose "Fetching published release version"
@@ -281,6 +313,7 @@ Function CheckForUpdate() {
             Start-Process $destination -Verb RunAs
             EXIT 0
         } catch {
+            Write-Error "Failed to download."
         }
         return $null
     } else {
@@ -299,7 +332,7 @@ $skippedVersion = $preferences.GetSkippedVersion()
 if (-not $Silent) {
     $retVal = CheckForUpdate -SkippedVersion $skippedVersion
     if ($null -ne $retVal) {
-        Write-Version "New release skipped"
+        Write-Error "New release skipped"
         $preferences.SetSkippedVersion($retVal)
     }
 }
@@ -307,7 +340,7 @@ if (-not $Silent) {
 
 #Get Registered Application for jar files
 $OpenCommand = Get-ShellOpenFromExtention -Extension '.jar'
-if ($null -eq $OpenCommand) {
+if ($null -eq $OpenCommand[0]) {
     #Could not pull jar association from registry.  Assume defaults and hope for the best
     $javaPath = "javaw.exe"
     $params = "-jar ""%1"""
@@ -412,8 +445,8 @@ try {
 # SIG # Begin signature block
 # MIIVkAYJKoZIhvcNAQcCoIIVgTCCFX0CAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUd+asx6tOVMwA/RwLkvLyENx3
-# 1AygghHwMIIFbzCCBFegAwIBAgIQSPyTtGBVlI02p8mKidaUFjANBgkqhkiG9w0B
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUXp/x2bakklfimZelkIZxQbDj
+# DwGgghHwMIIFbzCCBFegAwIBAgIQSPyTtGBVlI02p8mKidaUFjANBgkqhkiG9w0B
 # AQwFADB7MQswCQYDVQQGEwJHQjEbMBkGA1UECAwSR3JlYXRlciBNYW5jaGVzdGVy
 # MRAwDgYDVQQHDAdTYWxmb3JkMRowGAYDVQQKDBFDb21vZG8gQ0EgTGltaXRlZDEh
 # MB8GA1UEAwwYQUFBIENlcnRpZmljYXRlIFNlcnZpY2VzMB4XDTIxMDUyNTAwMDAw
@@ -513,17 +546,17 @@ try {
 # BgNVBAMTIlNlY3RpZ28gUHVibGljIENvZGUgU2lnbmluZyBDQSBSMzYCEQDJN+MR
 # H1J+ep/7M+S1o4j0MAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEMMQowCKACgACh
 # AoAAMBkGCSqGSIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAM
-# BgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBSVVl5Q8/Q4wE3AF5Oz8UfD3k8o
-# ZzANBgkqhkiG9w0BAQEFAASCAgBI09I/Ww5wugnG/Adv5t17sJsR6j20b3dPaBgB
-# 2v2M8ABpOk/VLDYu4PydUmXCEVSh4cUcmdNruKGKVDhFlmrWP9OY5aHw7Lnc4Ke7
-# CJkc/dw1hv1x/xCdGKwyiSvZxwCTZvqy6UC93bdBMEEfLKXZimLTCYjeDyg3G6S4
-# WDS2ZxdZJ4R6dOc6Z/2MAhOrA8yJqQ+J5nz3lhDAlg75PrEblHljcgyQf/CbMqwF
-# X8xlmYeiaxdkvXWGC5yVrgDYUc7oZ5F1xn/j03B5b07CIdm5Ga4HaefbNUvkjuo/
-# uzi7sdjVFV0bwEG4Wni9dgXs5qMcq1/e60V1ixpzCJb9i4WSF6yxb08vy6gGSKCL
-# D+vBHSCu5W7P8mZj1rgINzLXbrYKHWGsRjjN+Q6puZplaAQfwR41d+P4BiMi1mTA
-# QLMm1yLrq+rzohL/Iwdtoy3khAQvKIlnCGe2zoUGd2ybWQR57yCUEpSaPUshdEYh
-# nvXweJr3mWnYKzkuqrUVI0NKn0343QKYJyutXMbZylLYCj2sRezsHudBif7XeGC9
-# 3n1YYLty2T0K6BpcLueW0zqovRryL9p2v+OKoGe8OCuSO4dRdKRk6tc/SiCkU2U+
-# 7UIPjoZ2CW4xrFxJJVT2xrS7PkErJwlZJHfrqXiBVB0/Jb9B1H8h+KUSIbSC5Muv
-# kBDgSg==
+# BgorBgEEAYI3AgEVMCMGCSqGSIb3DQEJBDEWBBQIEYQyDxaMAX9vbGsVofyvu6Fz
+# MTANBgkqhkiG9w0BAQEFAASCAgB3IrBY/12/LI+iEZ5ZV0PPMm/p1VHdvD/1J9WX
+# 4Vlt+xLpf1VIsMocCOctMFo8pa1aT28twvdaNcePS5V6fMkJ/bQwI2/gayasbgn8
+# 9rg897H1G8Sn6iNp/uzxfnnptVACnx0NsVvSPcDIXq5nKIFzTe8yFoWu19n/9spd
+# 7w7MdcvE0Z6y0snkgakgbo5fDArFeZOIrvfIv/Q1kwKJqLNxlfcVs/oFfSk4S/uO
+# NiYlOPsGGQkDtTkKTe/lRor+3rw7iOEGhDKr4rqB2tt4g/fGH335HQLX2YNqyr0i
+# /wlau6FRpPqUnBajhZ+KqDcm55yTzdCn+FtLLsLzCMVMaWype5y/MsNlaBthHkT5
+# +cNFlG8ev3Hw+G7JGFrR2qRFBC8tOBI+MydUnSkTKXqBS5H3wJyfYyCofoROjE8b
+# OgT0YuRhUswZgS75o6w9sTKgWGv+deUBprx+oFAWVbWgB1PaAGQF4Lom5DeomkUJ
+# KJxKG9uc+24QMAqfU5osUTKel/aStr4w00F29RS/Ek/exlG4RQPa3+Yw4i1XaMEx
+# LYs8/BloW81TYc/ri2c72pRh+1BpaK7q6CG+4Gx3TSPwThNsSlfoiEvCxc7ENr8I
+# Yv3M0GICP83BVSPXxhq361LsBrx3zJOdS05AP/PKnidY7FAOL0w/P8RqGhnuxzdB
+# Dra+4g==
 # SIG # End signature block
