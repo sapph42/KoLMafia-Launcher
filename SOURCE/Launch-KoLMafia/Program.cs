@@ -2,7 +2,6 @@
 using Microsoft.Win32;
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -12,53 +11,29 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Xml.Linq;
 using Windows.Bits;
 
 namespace Launch_KoLMafia {
     internal class Preferences {
-        private string prefPath;
-        private string installLocation;
-        private int maxAttempts;
-        private bool silent;
-        private string skippedVersion;
-
-        public string PrefPath {
-            get { return prefPath; }
-            set { prefPath = value; }
-        }
-        public string InstallLocation {
-            get { return installLocation; }
-            set { installLocation = value; }
-        }
-        public int MaxAttempts {
-            get { return maxAttempts; }
-            set { maxAttempts = value; }
-        }
-        public bool Silent {
-            get { return silent; }
-            set { silent = value; }
-        }
-        public string SkippedVersion {
-            get { return skippedVersion; }
-            set { skippedVersion = value; }
-        }
+        public string PrefPath { get; set; }
+        public string InstallLocation { get; set; }
+        public int MaxAttempts { get; set; }
+        public bool Silent { get; set; }
+        public string SkippedVersion { get; set; }
         public Preferences(string prefPath) {
-            this.prefPath = prefPath;
-            if (!(Preferences.PrefsExistAndNotNull(prefPath))) {
-                Preferences.InitPrefs(prefPath);
-            }
-            this.LoadVals();
-            this.silent = false;
+            this.Initialize(prefPath, false);
         }
         public Preferences(string prefPath, bool silent) {
-            this.prefPath = prefPath;
+            this.Initialize(prefPath, silent);
+        }
+        private void Initialize(string prefPath, bool silent) {
+            this.PrefPath = prefPath;
             if (!(Preferences.PrefsExistAndNotNull(prefPath)) && silent) {
                 throw new ArgumentException("No registry config found, silence precludes requesting install location");
-            } else if(!(Preferences.PrefsExistAndNotNull(prefPath)) && !silent)  { 
+            } else if (!(Preferences.PrefsExistAndNotNull(prefPath)) && !silent) {
                 Preferences.InitPrefs(prefPath);
             }
-            this.silent = silent;
+            this.Silent = silent;
             this.LoadVals();
         }
         private static bool PrefsExistAndNotNull(string prefPath) {
@@ -120,16 +95,16 @@ namespace Launch_KoLMafia {
             }
         }
         private void LoadVals() {
-            if (!(Preferences.PrefsExistAndNotNull(this.prefPath))) {
-                Preferences.InitPrefs(this.prefPath);
+            if (!(Preferences.PrefsExistAndNotNull(this.PrefPath))) {
+                Preferences.InitPrefs(this.PrefPath);
             }
-            RegistryKey prefKey = Registry.CurrentUser.OpenSubKey(this.prefPath);
-            this.installLocation = prefKey.GetValue("PathToKoL").ToString();
-            this.maxAttempts = (int)prefKey.GetValue("MaxDownloadAttempts");
+            RegistryKey prefKey = Registry.CurrentUser.OpenSubKey(this.PrefPath);
+            this.InstallLocation = prefKey.GetValue("PathToKoL").ToString();
+            this.MaxAttempts = (int)prefKey.GetValue("MaxDownloadAttempts");
             if (prefKey.GetValue("SkippedVersion",null) == null) {
                 prefKey.SetValue("SkippedVersion", "", RegistryValueKind.String);
             }
-            this.skippedVersion = prefKey.GetValue("SkippedVersion").ToString();
+            this.SkippedVersion = prefKey.GetValue("SkippedVersion").ToString();
         }
     }
     internal static class Program {
@@ -143,9 +118,10 @@ namespace Launch_KoLMafia {
             if (RegisteredApplication == null) { return null; }
             string ShellOpen = Registry.ClassesRoot.OpenSubKey(RegisteredApplication + @"\shell\open\command").GetValue("").ToString();
             if (ShellOpen == null) { return null; }
-            if (Regex.IsMatch(ShellOpen, @"(?(^"")(?<path>""[^""]*"")|(?<path>[^ ]*)) (?<params>.*)", RegexOptions.IgnoreCase)) {
+            string commandPattern = @"(?(^"")(?<path>""[^""]*"")|(?<path>[^ ]*)) (?<params>.*)";
+            if (Regex.IsMatch(ShellOpen, commandPattern, RegexOptions.IgnoreCase)) {
                 Hashtable command = new();
-                MatchCollection matches = Regex.Matches(ShellOpen, @"(?(^"")(?<path>""[^""]*"")|(?<path>[^ ]*)) (?<params>.*)", RegexOptions.IgnoreCase);
+                MatchCollection matches = Regex.Matches(ShellOpen, commandPattern, RegexOptions.IgnoreCase);
                 foreach (Match match in matches) {
                     GroupCollection group = match.Groups;
                     command.Add("appPath", group["path"]);
@@ -186,16 +162,16 @@ namespace Launch_KoLMafia {
             StringBuilder builder = new();
             using (cryptoService) {
                 var fileStream = new FileStream(file,
-                                                       FileMode.Open,
-                                                       FileAccess.Read,
-                                                       FileShare.ReadWrite);
+                                                FileMode.Open,
+                                                FileAccess.Read,
+                                                FileShare.ReadWrite);
                 byte[] bytes = cryptoService.ComputeHash(fileStream);
                 fileStream.Dispose();
-                for (int i = 0; i < bytes.Length; i++) {
-                    builder.Append(bytes[i].ToString("x2"));
+                foreach (byte b in bytes) {
+                    builder.Append(b.ToString("x2"));
                 }
-                return builder.ToString();
             }
+            return builder.ToString();
         }
         static string CheckForUpdate(string SkippedVersion) {
             string installationKey = @"SOFTWARE\WOW6432Node\Sapph Tools\KoLMafia Launcher";
@@ -243,10 +219,37 @@ namespace Launch_KoLMafia {
             }
             return "";
         }
+        static bool KillAllProcByName(string ProcName) {
+            try {
+                Process[] processList = Process.GetProcessesByName(ProcName);
+                foreach (Process process in processList) {
+                    process.Kill();
+                }
+                return (Process.GetProcessesByName(ProcName).Length == 0);
+            } catch {
+                return false;
+            }
+        }
         static void Main(string[] args) {
             bool noLaunch = false;
             bool killOnUpdate = false;
             bool silent = false;
+            bool exists = false;
+            string javaPath;
+            string javaParams;
+            string javaName;
+            string current = "";
+            string latest = "";
+            string jarURI = "";
+            string fingerprintURI;
+            string localFingerprint = "";
+            string canonicalFingerprint = null;
+            string KoLBaseLocation = @"https://builds.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/artifact/dist/";
+            string[] currentList;
+            Hashtable command;
+            HashAlgorithm cryptoService = MD5.Create();
+            FileInfo currentFile;
+
             if (args.Length != 0) {
                 noLaunch = args.Contains("--noLaunch", StringComparer.CurrentCultureIgnoreCase);
                 killOnUpdate = args.Contains("--killOnUpdate", StringComparer.CurrentCultureIgnoreCase);
@@ -259,9 +262,7 @@ namespace Launch_KoLMafia {
                     preferences.SkippedVersion = releaseVer;
                 }
             }
-            Hashtable command = GetShellOpenFromExtension(".jar");
-            string javaPath;
-            string javaParams;
+            command = GetShellOpenFromExtension(".jar");
             if (command["appPath"] == null) {
                 javaPath = "javaw.exe";
                 javaParams = @"-jar ""%1""";
@@ -269,15 +270,15 @@ namespace Launch_KoLMafia {
                 javaPath = command["appPath"].ToString();
                 javaParams = command["arguments"].ToString();
             }
+            javaName = Regex.Match(javaPath, @"(?<name>[^\\]*)(?:\.exe)", RegexOptions.IgnoreCase).Groups["name"].Value;
             if (killOnUpdate) {
-                Process[] processList = Process.GetProcessesByName("javaw");
-                foreach (Process process in processList) {
-                    process.Kill();
+                if (!KillAllProcByName(javaName)) {
+                    Environment.Exit(42);
                 }
             }
             if (Process.GetProcessesByName("javaw").Length > 0) {
                 if (silent) {
-                    Environment.Exit(1);
+                    Environment.Exit(43);
                 }
                 string msg = "A javaw.exe process has been detected. For safety, update cannot continue without killing this process.";
                 string title = "Java Interpreter Already Running";
@@ -289,22 +290,14 @@ namespace Launch_KoLMafia {
                 if (answer == cancel) {
                     Environment.Exit(1);
                 } else {
-                    Process[] processList = Process.GetProcessesByName("javaw");
-                    foreach (Process process in processList) {
-                        process.Kill();
+                    if (!KillAllProcByName(javaName)) {
+                        Environment.Exit(42);
                     }
                 }
             }
-            string KoLBaseLocation = @"https://builds.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/artifact/dist/";
-            string[] currentList = System.IO.Directory.GetFiles(preferences.InstallLocation, "*.jar");
-            string current = "";
-            string latest = "";
-            string jarURI = "";
-            string fingerprintURI;
-            bool exists = false;
-            string localFingerprint = "";
-            string canonicalFingerprint = null;
-            HashAlgorithm cryptoService = MD5.Create();
+
+            currentList = System.IO.Directory.GetFiles(preferences.InstallLocation, "*.jar");
+
             if (currentList.Length > 1) {
                 Array.Sort(currentList, StringComparer.OrdinalIgnoreCase);
                 for (int i = 0; i < currentList.Length - 1; i++) {
@@ -335,7 +328,7 @@ namespace Launch_KoLMafia {
                 current = currentList[0];
                 localFingerprint = GetLocalHash(current, cryptoService);
             }
-            FileInfo currentFile = new(current);
+            currentFile = new(current);
             try {
                 HtmlWeb web = new();
                 HtmlAgilityPack.HtmlDocument htmlDoc = web.Load(KoLBaseLocation);
@@ -388,11 +381,10 @@ namespace Launch_KoLMafia {
                         FileName = javaPath,
                         Arguments = javaParams.Replace(@"%1", thisFile.FullName).Replace(@" %*",""),
                         WorkingDirectory = thisFile.Directory.FullName
-                };
+                    };
                     System.Diagnostics.Process.Start(processStartInfo);
                 }
             }
-
         }
     }
 }
