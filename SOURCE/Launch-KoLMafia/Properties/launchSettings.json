@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "Launch-KoLMafia": {
+      "commandName": "Project"
+    },
+    "Task": {
+      "commandName": "Project",
+      "commandLineArgs": "--Silent --killOnUpdate --noLaunch"
+    }
+  }
+}
