@@ -6,3 +6,4 @@
 *.xml
 *.msi
 *.dll
+.vs/
