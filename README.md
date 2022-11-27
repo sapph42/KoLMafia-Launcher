@@ -9,18 +9,13 @@ KolMafia Launcher is a launcher/updater for KoLMafia launcher.
 * Allows the user to have a static shortcut for launching KoLMafia, even though the target name changes on a regular basis
 * Self-updating capability with user opt-out option
 * Optional installation of scheduled task that runs during rollover to potentially speed launch
-* Digitally signed source script, binary, and installer from Microsoft-trusted CA
+* Digitally signed binary and installer from Microsoft-trusted CA
 
 ## Installation
 
 ### Binary
 
 1. Download and run the KoLMafia-Launcher executable in the root of the repository or attached to the latest release
-
-### Source
-
-1. Download SOURCE\Launch-KoLMafia.ps1
-2. Run as-is, or use whatever methods you see fit to compile to executable
 
 ## Usage
 
@@ -29,17 +24,14 @@ KolMafia Launcher is a launcher/updater for KoLMafia launcher.
 
 ### Command-line switches
 
-`-noLaunch`
+`--noLaunch`
 * Only runs update check, does not launch KolMafia
 
-`-killOnUpdate`
+`--killOnUpdate`
 * Checks for other instances of the system-defined launcher for GUI-based JAR files, and terminates them. Useful with the -Silent flag, as updating the JAR while it is running is not recommended
 
-`-Silent`
+`--Silent`
 * Prevents any error messages from appearing. Useful in conjunction with scheduled tasks
-
-`-Verbose`
-* Used for troubleshooting, outputs various messages to terminal
 
 ## Legal Notice
 
@@ -51,5 +43,4 @@ tptb were good enough to let me whip up an icon that incorporates their IP for u
 
 ## Requirements
 
-* All versions require PowerShell 5.1 or higher.
-* Additionally, the binary requires .NET 4.6.2 or higher.
+* .NET 6.0
