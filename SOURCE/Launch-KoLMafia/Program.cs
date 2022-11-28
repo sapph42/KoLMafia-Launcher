@@ -208,6 +208,9 @@ namespace Launch_KoLMafia {
                 if (GetWebFile(sourceURI, destination, DownloadPriority.Foreground, null, null)) {
                     ProcessStartInfo processStartInfo = new() {
                         FileName = destination,
+                        WorkingDirectory = Environment.GetEnvironmentVariable("Temp"),
+                        ErrorDialog = true,
+                        UseShellExecute = true,
                         Verb = "runas"
                     };
                     System.Diagnostics.Process.Start(processStartInfo);
