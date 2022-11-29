@@ -14,6 +14,22 @@ using System.Windows.Forms;
 using Windows.Bits;
 
 namespace Launch_KoLMafia {
+    public static class MyExtensions {
+        public static string Hash (this FileInfo file, HashAlgorithm cryptoService) {
+            if (!file.Exists) return null;
+            StringBuilder builder = new();
+            using (cryptoService) {
+                using (FileStream fileStream = file.Open(FileMode.Open)) {
+                    fileStream.Position = 0;
+                    byte[] bytes = cryptoService.ComputeHash(fileStream);
+                    foreach (byte b in bytes) {
+                        builder.Append(b.ToString("x2"));
+                    }
+                }
+            }
+            return builder.ToString().ToLower();
+        }
+    }
     internal class Preferences {
         public string PrefPath { get; set; }
         public string InstallLocation { get; set; }
@@ -138,9 +154,9 @@ namespace Launch_KoLMafia {
                 return null;
             }
         }
-        static bool GetWebFile(string URI, string Destination, DownloadPriority Priority, string Fingerprint, HashAlgorithm cryptoService) {
+        static bool GetWebFile(string URI, FileInfo Destination, DownloadPriority Priority, string Fingerprint, HashAlgorithm cryptoService) {
             DownloadManager download = new();
-            IDownloadJob job = download.CreateJob("BITS Download", URI, Destination, Priority);
+            IDownloadJob job = download.CreateJob("BITS Download", URI, Destination.FullName, Priority);
             job.Resume();
             bool jobIsFinal = false;
             while (!jobIsFinal) {
@@ -160,24 +176,8 @@ namespace Launch_KoLMafia {
                 }
             }
             if (Fingerprint != null) {
-                string targetHash = GetLocalHash(Destination, cryptoService).ToLower();
-                return targetHash == Fingerprint;
+                return Destination.Hash(cryptoService) == Fingerprint;
             } else return true;
-        }
-        static string GetLocalHash(string file, HashAlgorithm cryptoService) {
-            StringBuilder builder = new();
-            using (cryptoService) {
-                var fileStream = new FileStream(file,
-                                                FileMode.Open,
-                                                FileAccess.Read,
-                                                FileShare.ReadWrite);
-                byte[] bytes = cryptoService.ComputeHash(fileStream);
-                fileStream.Dispose();
-                foreach (byte b in bytes) {
-                    builder.Append(b.ToString("x2"));
-                }
-            }
-            return builder.ToString();
         }
         static string CheckForUpdate(string SkippedVersion) {
             string installationKey = @"SOFTWARE\WOW6432Node\Sapph Tools\KoLMafia Launcher";
@@ -209,11 +209,11 @@ namespace Launch_KoLMafia {
             }
             string targetInstallerName = $"KoLMafia-Launcher_{releaseVersion}.exe";
             string sourceURI = $"https://github.com/sapph42/KoLMafia-Launcher/raw/main/{targetInstallerName}";
-            string destination = Environment.GetEnvironmentVariable("Temp") + @"\" + targetInstallerName;
+            FileInfo destination = new(Environment.GetEnvironmentVariable("Temp") + @"\" + targetInstallerName);
             try {
                 if (GetWebFile(sourceURI, destination, DownloadPriority.Foreground, null, null)) {
                     ProcessStartInfo processStartInfo = new() {
-                        FileName = destination,
+                        FileName = destination.FullName,
                         WorkingDirectory = Environment.GetEnvironmentVariable("Temp"),
                         ErrorDialog = true,
                         UseShellExecute = true,
@@ -234,6 +234,7 @@ namespace Launch_KoLMafia {
                 foreach (Process process in processList) {
                     process.Kill();
                 }
+                System.Threading.Thread.Sleep(200);
                 return (Process.GetProcessesByName(ProcName).Length == 0);
             } catch {
                 return false;
@@ -247,17 +248,16 @@ namespace Launch_KoLMafia {
             string javaPath;
             string javaParams;
             string javaName;
-            string current = "";
-            string latest = "";
+            string latestJARName = "";
             string jarURI = "";
             string fingerprintURI;
-            string localFingerprint = "";
             string canonicalFingerprint = null;
             string KoLBaseLocation = Program.KoLBaseLocation;
             string[] currentList;
             Hashtable command;
             HashAlgorithm cryptoService = MD5.Create();
-            FileInfo currentFile;
+            FileInfo currentFile = null;
+            FileInfo latestFile = null;
 
             if (args.Length != 0) {
                 noLaunch = args.Contains("--noLaunch", StringComparer.CurrentCultureIgnoreCase);
@@ -312,8 +312,7 @@ namespace Launch_KoLMafia {
                 for (int i = 0; i < currentList.Length - 1; i++) {
                     System.IO.File.Delete(currentList[i]);
                 }
-                current = currentList[^1];
-                localFingerprint = GetLocalHash(current, cryptoService);
+                currentFile = new(currentList[^1]);
                 exists = true;
             } else if (currentList.Length == 0) {
                 if (silent) {
@@ -334,22 +333,20 @@ namespace Launch_KoLMafia {
                 }
             } else {
                 exists = true;
-                current = currentList[0];
-                localFingerprint = GetLocalHash(current, cryptoService);
+                currentFile = new(currentList[0]);
             }
-            currentFile = new(current);
             try {
                 HtmlWeb web = new();
                 HtmlAgilityPack.HtmlDocument htmlDoc = web.Load(KoLBaseLocation);
                 HtmlNode body = htmlDoc.DocumentNode.SelectSingleNode("//body");
                 foreach (HtmlNode nNode in body.Descendants("a")) {
                     if (nNode.NodeType == HtmlNodeType.Element && nNode.InnerHtml.EndsWith(".jar")) {
-                        latest = nNode.InnerHtml;
+                        latestJARName = nNode.InnerHtml;
                         break;
                     }
                 }
 
-                jarURI = KoLBaseLocation + latest;
+                jarURI = KoLBaseLocation + latestJARName;
                 fingerprintURI = jarURI + @"/*fingerprint*/";
 
                 web = new();
@@ -362,36 +359,35 @@ namespace Launch_KoLMafia {
                     }
                 }
 
-                if (!exists || (currentFile.Name != latest) || (localFingerprint != canonicalFingerprint)) {
+                if (!exists || (currentFile.Name != latestJARName) || (currentFile.Hash(cryptoService) != canonicalFingerprint)) {
                     int attempts = 1;
-                    FileInfo destination = new(preferences.InstallLocation + @"\" + latest);
-                    bool downloadSuccess = GetWebFile(jarURI, destination.FullName, DownloadPriority.Foreground, canonicalFingerprint, cryptoService);
+                    FileInfo destination = new(preferences.InstallLocation + @"\" + latestJARName);
+                    bool downloadSuccess = GetWebFile(jarURI, destination, DownloadPriority.Foreground, canonicalFingerprint, cryptoService);
                     while (!downloadSuccess && attempts < preferences.MaxAttempts) {
                         if (destination.Exists) { destination.Delete(); }
-                        downloadSuccess = GetWebFile(jarURI, destination.FullName, DownloadPriority.Foreground, canonicalFingerprint, cryptoService);
+                        downloadSuccess = GetWebFile(jarURI, destination, DownloadPriority.Foreground, canonicalFingerprint, cryptoService);
                         attempts++;
                     }
                     if (exists && downloadSuccess) {
                         currentFile.Delete();
-                        latest = destination.FullName;
+                        latestFile = destination;
                     }
                 } else {
-                    latest = currentFile.FullName;
+                    latestFile = currentFile;
                 }
             } catch (HttpRequestException e) {
                 Console.WriteLine("\nException Caught!");
                 Console.WriteLine(e.Message);
                 if (!silent) {
                     MessageBox.Show(@"Received a error when attempting to retreive and/or save the latest version. Your previous version has been kept, and will now be run.");
-                    latest = currentFile.FullName;
+                    latestFile = currentFile;
                 }
             } finally {
                 if (!noLaunch) {
-                    FileInfo thisFile = new(latest);
                     ProcessStartInfo processStartInfo = new() {
                         FileName = javaPath,
-                        Arguments = javaParams.Replace(@"%1", thisFile.FullName).Replace(@" %*",""),
-                        WorkingDirectory = thisFile.Directory.FullName
+                        Arguments = javaParams.Replace(@"%1", latestFile.FullName).Replace(@" %*",""),
+                        WorkingDirectory = latestFile.Directory.FullName
                     };
                     System.Diagnostics.Process.Start(processStartInfo);
                 }
