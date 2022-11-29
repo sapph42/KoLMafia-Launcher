@@ -108,20 +108,26 @@ namespace Launch_KoLMafia {
         }
     }
     internal static class Program {
+        private const string KoLBaseLocation = @"https://builds.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/artifact/dist/";
         static readonly HttpClient client = new();
         static Hashtable GetShellOpenFromExtension(string Extension) {
-            if (!Regex.IsMatch(Extension, @"\.?(?<Extension>[a-z0-9]{1,3}$)", RegexOptions.IgnoreCase)) {
+            string extensionPatthern = @"\.?(?<Extension>[a-z0-9]{1,}$)";
+            string commandPattern = @"(?(^"")(?<path>""[^""]*"")|(?<path>[^ ]*)) (?<params>.*)";
+            MatchCollection matches = Regex.Matches(Extension, extensionPatthern, RegexOptions.IgnoreCase);
+            if (matches.Count == 0) {
                 return null;
             }
-            Extension = "." + Regex.Matches(Extension, @"\.?(?<Extension>[a-z0-9]{1,3}$)", RegexOptions.IgnoreCase)[0].Groups["Extension"].Value;
+            Extension = "." + matches[0].Groups["Extension"].Value;
+
             string RegisteredApplication = Registry.ClassesRoot.OpenSubKey(Extension).GetValue("").ToString();
             if (RegisteredApplication == null) { return null; }
+
             string ShellOpen = Registry.ClassesRoot.OpenSubKey(RegisteredApplication + @"\shell\open\command").GetValue("").ToString();
             if (ShellOpen == null) { return null; }
-            string commandPattern = @"(?(^"")(?<path>""[^""]*"")|(?<path>[^ ]*)) (?<params>.*)";
-            if (Regex.IsMatch(ShellOpen, commandPattern, RegexOptions.IgnoreCase)) {
+
+            matches = Regex.Matches(ShellOpen, commandPattern, RegexOptions.IgnoreCase);
+            if (matches.Count > 0) {
                 Hashtable command = new();
-                MatchCollection matches = Regex.Matches(ShellOpen, commandPattern, RegexOptions.IgnoreCase);
                 foreach (Match match in matches) {
                     GroupCollection group = match.Groups;
                     command.Add("appPath", group["path"]);
@@ -247,7 +253,7 @@ namespace Launch_KoLMafia {
             string fingerprintURI;
             string localFingerprint = "";
             string canonicalFingerprint = null;
-            string KoLBaseLocation = @"https://builds.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/artifact/dist/";
+            string KoLBaseLocation = Program.KoLBaseLocation;
             string[] currentList;
             Hashtable command;
             HashAlgorithm cryptoService = MD5.Create();
@@ -339,6 +345,7 @@ namespace Launch_KoLMafia {
                 foreach (HtmlNode nNode in body.Descendants("a")) {
                     if (nNode.NodeType == HtmlNodeType.Element && nNode.InnerHtml.EndsWith(".jar")) {
                         latest = nNode.InnerHtml;
+                        break;
                     }
                 }
 
@@ -351,6 +358,7 @@ namespace Launch_KoLMafia {
                 foreach (HtmlNode nNode in body.Descendants("li")) {
                     if (nNode.NodeType == HtmlNodeType.Element && Regex.IsMatch(nNode.InnerHtml, @"[a-z0-9]{32}", RegexOptions.IgnoreCase)) {
                         canonicalFingerprint = nNode.InnerHtml;
+                        break;
                     }
                 }
 
