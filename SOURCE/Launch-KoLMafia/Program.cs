@@ -6,12 +6,15 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Resources;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Windows.Bits;
+
+[assembly: NeutralResourcesLanguageAttribute("en-US")]
 
 namespace Launch_KoLMafia {
 	public static class MyExtensions {
@@ -58,7 +61,7 @@ namespace Launch_KoLMafia {
 		private void Initialize(string prefPath, bool silent) {
 			this.PrefPath = prefPath;
 			if (!(Preferences.PrefsExistAndNotNull(prefPath)) && silent) {
-				throw new ArgumentException("No registry config found, silence precludes requesting install location");
+				throw new ArgumentException(Properties.Resources.SilentEmptyRegistryError);
 			} else if (!(Preferences.PrefsExistAndNotNull(prefPath)) && !silent) {
 				Preferences.InitPrefs(prefPath);
 			}
@@ -80,7 +83,7 @@ namespace Launch_KoLMafia {
 				using OpenFileDialog dialog = new();
 				dialog.InitialDirectory = Environment.GetEnvironmentVariable("UserProfile");
 				dialog.Filter = "JAR files (*.jar)| *.jar";
-				dialog.Title = "Select Location of KolMafia JAR";
+				dialog.Title = Properties.Resources.JarFileSelectTitle;
 				if (dialog.ShowDialog() == DialogResult.OK) {
 					FileInfo selectedJar = new(dialog.FileName);
 					string installPath = selectedJar.Directory.Name;
@@ -93,8 +96,8 @@ namespace Launch_KoLMafia {
 				askForDir = false;
 			}
 			if (askForDir) {
-				string msg = "No file was selected. Should Launcher assume you don't have KoLMafia installed and ask where you want it? (Selecting No will exit immediately)";
-				string title = "No file selected";
+				string msg = Properties.Resources.TargetFolderDialogMsg;
+				string title = Properties.Resources.TargetFolderDialogTitle;
 				MessageBoxButtons buttons = MessageBoxButtons.YesNo;
 				DialogResult nobutton = DialogResult.No;
 				MessageBoxIcon question = MessageBoxIcon.Question;
@@ -105,7 +108,7 @@ namespace Launch_KoLMafia {
 				} else {
 					using FolderBrowserDialog selectFolder = new();
 					selectFolder.SelectedPath = Environment.GetEnvironmentVariable("UserProfile");
-					selectFolder.Description = "Select where you want to install KoLMafia";
+					selectFolder.Description = Properties.Resources.FolderSelectTitle;
 					selectFolder.ShowNewFolderButton = true;
 					DialogResult result = selectFolder.ShowDialog();
 					if (result == DialogResult.Cancel) {
@@ -210,8 +213,8 @@ namespace Launch_KoLMafia {
 			if (releaseVersion == currentVersion || releaseVersion == SkippedVersion) {
 				return "";
 			}
-			string msg = $"An updated version({releaseVersion}) of KoLMafia Launcher is available! Update now? (Or skip this release ?)";
-			string title = "Update available!";
+			string msg = string.Format(Properties.Resources.NewVersionDialogMsg, releaseVersion);
+			string title = Properties.Resources.NewVersionDialogTitle;
 			MessageBoxButtons buttons = MessageBoxButtons.YesNo;
 			DialogResult nobutton = DialogResult.No;
 			MessageBoxIcon icon = MessageBoxIcon.Question;
@@ -302,8 +305,8 @@ namespace Launch_KoLMafia {
 				if (silent) {
 					Environment.Exit(43);
 				}
-				string msg = "A javaw.exe process has been detected. For safety, update cannot continue without killing this process.";
-				string title = "Java Interpreter Already Running";
+				string msg = string.Format(Properties.Resources.ProcessConflictDialogMsg, javaName);
+				string title = Properties.Resources.ProcessConflictDialogTitle;
 				MessageBoxButtons buttons = MessageBoxButtons.OKCancel;
 				DialogResult cancel = DialogResult.Cancel;
 				MessageBoxIcon icon = MessageBoxIcon.Warning;
@@ -331,8 +334,8 @@ namespace Launch_KoLMafia {
 				if (silent) {
 					exists = false; 
 				} else {
-					string msg = $"No jar file found in the provided folder. Download latest mafia to {preferences.InstallLocation}?";
-					string title = "Mafia Not Found!";
+					string msg = string.Format(Properties.Resources.DownloadToNewConfirmMsg, preferences.InstallLocation);
+					string title = Properties.Resources.DownloadToNewConfirmTitle;
 					MessageBoxButtons buttons = MessageBoxButtons.YesNo;
 					DialogResult nobutton = DialogResult.No;
 					MessageBoxIcon icon = MessageBoxIcon.Question;
@@ -376,7 +379,7 @@ namespace Launch_KoLMafia {
 				Console.WriteLine("\nException Caught!");
 				Console.WriteLine(e.Message);
 				if (!silent) {
-					MessageBox.Show(@"Received a error when attempting to retreive and/or save the latest version. Your previous version has been kept, and will now be run.");
+					MessageBox.Show(Properties.Resources.RetreivalError);
 					latestFile = currentFile;
 				}
 			} finally {
