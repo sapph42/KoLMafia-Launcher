@@ -2,7 +2,6 @@
 using Microsoft.Win32;
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -10,10 +9,8 @@ using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Xml.Linq;
 using Windows.Bits;
 
 namespace Launch_KoLMafia {
@@ -33,18 +30,18 @@ namespace Launch_KoLMafia {
 			return builder.ToString().ToLower();
 		}
 		public static string GetFirstMatchingDescendent(this HtmlNode node, string ElementType, string Pattern) {
-            foreach (HtmlNode dNode in node.Descendants(ElementType)) {
+			foreach (HtmlNode dNode in node.Descendants(ElementType)) {
 				if (dNode.NodeType == HtmlNodeType.Element && Regex.IsMatch(dNode.InnerHtml, Pattern, RegexOptions.IgnoreCase)) {
-                    return dNode.InnerHtml;
-                }
-            }
+					return dNode.InnerHtml;
+				}
+			}
 			return null;
-        }
+		}
 		public static HtmlNode GetUriBody(this Uri uri) {
-            HtmlWeb web = new();
-            HtmlAgilityPack.HtmlDocument htmlDoc = web.Load(uri);
-            return htmlDoc.DocumentNode.SelectSingleNode("//body");
-        }
+			HtmlWeb web = new();
+			HtmlAgilityPack.HtmlDocument htmlDoc = web.Load(uri);
+			return htmlDoc.DocumentNode.SelectSingleNode("//body");
+		}
 	}
 	internal class Preferences {
 		public string PrefPath { get; set; }
@@ -139,7 +136,7 @@ namespace Launch_KoLMafia {
 			this.SkippedVersion = prefKey.GetValue("SkippedVersion").ToString();
 		}
 	}
-    internal static class Program {
+	internal static class Program {
 		private const string KoLBaseLocation = @"https://builds.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/artifact/dist/";
 		static readonly HttpClient client = new();
 		static Hashtable GetShellOpenFromExtension(string Extension) {
@@ -267,9 +264,9 @@ namespace Launch_KoLMafia {
 			string latestJARName = "";
 			string canonicalFingerprint = null;
 			Uri KoLBaseLocation = new(Program.KoLBaseLocation);
-            Uri jarURI;
-            Uri fingerprintURI;
-            string[] currentList;
+			Uri jarURI;
+			Uri fingerprintURI;
+			string[] currentList;
 			Hashtable command;
 			HashAlgorithm cryptoService = MD5.Create();
 			FileInfo currentFile = null;
