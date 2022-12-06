@@ -1,12 +1,15 @@
-﻿using HtmlAgilityPack;
+﻿#nullable enable
+using HtmlAgilityPack;
 using Microsoft.Win32;
 using System;
 using System.Collections;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Resources;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -16,9 +19,11 @@ using Windows.Bits;
 
 [assembly: NeutralResourcesLanguageAttribute("en-US")]
 
+
 namespace Launch_KoLMafia {
 	public static class MyExtensions {
-		public static string Hash (this FileInfo file, HashAlgorithm cryptoService) {
+		public static string Hash (this FileInfo file, 
+									HashAlgorithm cryptoService) {
 			if (!file.Exists) return null;
 			StringBuilder builder = new();
 			using (cryptoService) {
@@ -32,7 +37,9 @@ namespace Launch_KoLMafia {
 			}
 			return builder.ToString().ToLower();
 		}
-		public static string GetFirstMatchingDescendent(this HtmlNode node, string ElementType, string Pattern) {
+		public static string? GetFirstMatchingDescendent(this HtmlNode node, 
+														string ElementType, 
+														[StringSyntax(StringSyntaxAttribute.Regex)] string Pattern) {
 			foreach (HtmlNode dNode in node.Descendants(ElementType)) {
 				if (dNode.NodeType == HtmlNodeType.Element && Regex.IsMatch(dNode.InnerHtml, Pattern, RegexOptions.IgnoreCase)) {
 					return dNode.InnerHtml;
@@ -47,6 +54,7 @@ namespace Launch_KoLMafia {
 		}
 	}
 	internal class Preferences {
+#nullable disable
 		public string PrefPath { get; set; }
 		public string InstallLocation { get; set; }
 		public int MaxAttempts { get; set; }
@@ -130,7 +138,7 @@ namespace Launch_KoLMafia {
 			if (!(Preferences.PrefsExistAndNotNull(this.PrefPath))) {
 				Preferences.InitPrefs(this.PrefPath);
 			}
-			RegistryKey prefKey = Registry.CurrentUser.OpenSubKey(this.PrefPath);
+			RegistryKey prefKey = Registry.CurrentUser.OpenSubKey(PrefPath);
 			this.InstallLocation = prefKey.GetValue("PathToKoL").ToString();
 			this.MaxAttempts = (int)prefKey.GetValue("MaxDownloadAttempts");
 			if (prefKey.GetValue("SkippedVersion",null) == null) {
@@ -138,39 +146,88 @@ namespace Launch_KoLMafia {
 			}
 			this.SkippedVersion = prefKey.GetValue("SkippedVersion").ToString();
 		}
+#nullable enable
 	}
 	internal static class Program {
+		[DllImport("Shlwapi.dll", CharSet = CharSet.Unicode)]
+		public static extern uint AssocQueryString(
+			AssocF flags,
+			AssocStr str,
+			string pszAssoc,
+			string? pszExtra,
+			[Out] StringBuilder? pszOut,
+			ref uint pcchOut
+		);
+		[Flags]
+		public enum AssocF {
+			None = 0,
+			Init_NoRemapCLSID = 0x1,
+			Init_ByExeName = 0x2,
+			Open_ByExeName = 0x2,
+			Init_DefaultToStar = 0x4,
+			Init_DefaultToFolder = 0x8,
+			NoUserSettings = 0x10,
+			NoTruncate = 0x20,
+			Verify = 0x40,
+			RemapRunDll = 0x80,
+			NoFixUps = 0x100,
+			IgnoreBaseClass = 0x200,
+			Init_IgnoreUnknown = 0x400,
+			Init_Fixed_ProgId = 0x800,
+			Is_Protocol = 0x1000,
+			Init_For_File = 0x2000
+		}
+		public enum AssocStr {
+			Command = 1,
+			Executable,
+			FriendlyDocName,
+			FriendlyAppName,
+			NoOpen,
+			ShellNewValue,
+			DDECommand,
+			DDEIfExec,
+			DDEApplication,
+			DDETopic,
+			InfoTip,
+			QuickTip,
+			TileInfo,
+			ContentType,
+			DefaultIcon,
+			ShellExtension,
+			DropTarget,
+			DelegateExecute,
+			Supported_Uri_Protocols,
+			ProgID,
+			AppID,
+			AppPublisher,
+			AppIconReference,
+			Max
+		}
 		private const string KoLBaseLocation = @"https://builds.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/artifact/dist/";
 		static readonly HttpClient client = new();
-		static Hashtable GetShellOpenFromExtension(string Extension) {
-			string extensionPattern = /* language=regex */ @"\.?(?<Extension>[a-z0-9]{1,}$)";
-			string commandPattern = /* language=regex */ @"(?(^"")(?<path>""[^""]*"")|(?<path>[^ ]*)) (?<params>.*)";
-			MatchCollection matches = Regex.Matches(Extension, extensionPattern, RegexOptions.IgnoreCase);
-			if (matches.Count == 0) {
-				return null;
+		static string? AssocQueryString(AssocStr association, string extension) {
+			const int S_OK = 0;
+			const int S_FALSE = 1;
+
+			uint length = 0;
+			uint ret = AssocQueryString(AssocF.None, association, extension, null, null, ref length);
+			if (ret != S_FALSE) {
+			    return null;
 			}
-			Extension = "." + matches[0].Groups["Extension"].Value;
 
-			string RegisteredApplication = Registry.ClassesRoot.OpenSubKey(Extension).GetValue("").ToString();
-			if (RegisteredApplication == null) { return null; }
-
-			string ShellOpen = Registry.ClassesRoot.OpenSubKey(RegisteredApplication + @"\shell\open\command").GetValue("").ToString();
-			if (ShellOpen == null) { return null; }
-
-			matches = Regex.Matches(ShellOpen, commandPattern, RegexOptions.IgnoreCase);
-			if (matches.Count > 0) {
-				Hashtable command = new();
-				foreach (Match match in matches) {
-					GroupCollection group = match.Groups;
-					command.Add("appPath", group["path"]);
-					command.Add("arguments", group["params"]);
-				}
-				return command;
-			} else {
-				return null;
+			var sb = new StringBuilder((int)length); // (length-1) will probably work too as the marshaller adds null termination
+			ret = AssocQueryString(AssocF.None, association, extension, null, sb, ref length);
+			if (ret != S_OK) {
+			    return null;
 			}
+
+			return sb.ToString();
 		}
-		static bool GetWebFile(Uri URI, FileInfo Destination, DownloadPriority Priority, string Fingerprint, HashAlgorithm cryptoService) {
+		static bool GetWebFile(Uri URI, 
+								FileInfo Destination, 
+								DownloadPriority Priority, 
+								string Fingerprint, 
+								HashAlgorithm cryptoService) {
 			DownloadManager download = new();
 			IDownloadJob job = download.CreateJob("BITS Download", URI.AbsoluteUri, Destination.FullName, Priority);
 			job.Resume();
@@ -261,8 +318,6 @@ namespace Launch_KoLMafia {
 			bool killOnUpdate = false;
 			bool silent = false;
 			bool exists = false;
-			string javaPath;
-			string javaParams;
 			string javaName;
 			string latestJARName = "";
 			string canonicalFingerprint = null;
@@ -287,21 +342,13 @@ namespace Launch_KoLMafia {
 					preferences.SkippedVersion = releaseVer;
 				}
 			}
-			command = GetShellOpenFromExtension(".jar");
-			if (command["appPath"] == null) {
-				javaPath = "javaw.exe";
-				javaParams = @"-jar ""%1""";
-			} else {
-				javaPath = command["appPath"].ToString();
-				javaParams = command["arguments"].ToString();
-			}
-			javaName = Regex.Match(javaPath, @"(?<name>[^\\]*)(?:\.exe)", RegexOptions.IgnoreCase).Groups["name"].Value;
+			javaName = AssocQueryString(AssocStr.DDEApplication, ".jar");
 			if (killOnUpdate) {
 				if (!KillAllProcByName(javaName)) {
 					Environment.Exit(42);
 				}
 			}
-			if (Process.GetProcessesByName("javaw").Length > 0) {
+			if (Process.GetProcessesByName(javaName).Length > 0) {
 				if (silent) {
 					Environment.Exit(43);
 				}
@@ -385,8 +432,8 @@ namespace Launch_KoLMafia {
 			} finally {
 				if (!noLaunch) {
 					ProcessStartInfo processStartInfo = new() {
-						FileName = javaPath,
-						Arguments = javaParams.Replace(@"%1", latestFile.FullName).Replace(@" %*",""),
+						FileName = latestFile.FullName,
+						UseShellExecute= true,
 						WorkingDirectory = latestFile.Directory.FullName
 					};
 					System.Diagnostics.Process.Start(processStartInfo);
