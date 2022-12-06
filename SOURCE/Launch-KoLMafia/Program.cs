@@ -1,5 +1,4 @@
-﻿#nullable enable
-using HtmlAgilityPack;
+﻿using HtmlAgilityPack;
 using Microsoft.Win32;
 using System;
 using System.Collections;
@@ -22,7 +21,8 @@ using Windows.Bits;
 
 namespace Launch_KoLMafia {
 	public static class MyExtensions {
-		public static string Hash (this FileInfo file, 
+#nullable enable
+		public static string? Hash (this FileInfo file, 
 									HashAlgorithm cryptoService) {
 			if (!file.Exists) return null;
 			StringBuilder builder = new();
@@ -52,38 +52,61 @@ namespace Launch_KoLMafia {
 			HtmlAgilityPack.HtmlDocument htmlDoc = web.Load(uri);
 			return htmlDoc.DocumentNode.SelectSingleNode("//body");
 		}
-	}
-	internal class Preferences {
 #nullable disable
-		public string PrefPath { get; set; }
+	}
+	internal sealed class Preferences {
+		public required string PrefPath { get; set; }
 		public string InstallLocation { get; set; }
 		public int MaxAttempts { get; set; }
 		public bool Silent { get; set; }
 		public string SkippedVersion { get; set; }
 		public Preferences(string prefPath) {
-			this.Initialize(prefPath, false);
+			PrefPath = prefPath;
+			this.Initialize(false);
 		}
+		[SetsRequiredMembers]
 		public Preferences(string prefPath, bool silent) {
-			this.Initialize(prefPath, silent);
+			PrefPath = prefPath;
+			this.Initialize(silent);
 		}
-		private void Initialize(string prefPath, bool silent) {
-			this.PrefPath = prefPath;
-			if (!(Preferences.PrefsExistAndNotNull(prefPath)) && silent) {
+		private void Initialize(bool silent) {
+			if (!(Preferences.PrefsExistAndNotNull(PrefPath)) && silent) {
 				throw new ArgumentException(Properties.Resources.SilentEmptyRegistryError);
-			} else if (!(Preferences.PrefsExistAndNotNull(prefPath)) && !silent) {
-				Preferences.InitPrefs(prefPath);
+			} else if (!(Preferences.PrefsExistAndNotNull(PrefPath)) && !silent) {
+				Preferences.InitPrefs(PrefPath);
 			}
 			this.Silent = silent;
 			this.LoadVals();
 		}
 		private static bool PrefsExistAndNotNull(string prefPath) {
-			RegistryKey prefKey = Registry.CurrentUser.OpenSubKey(prefPath);
-			if (prefKey == null) { return false; }
-			object KoLPath = prefKey.GetValue("PathToKoL", null);
-			if (KoLPath == null) { return false; }
-			if (string.IsNullOrEmpty(KoLPath.ToString())) { return false; }
+			if (Registry.CurrentUser.OpenSubKey(prefPath) is null) { return false; }
+			if (Registry.CurrentUser.OpenSubKey(prefPath).GetValue("PathToKoL", null) is null) { return false; }
+			if (string.IsNullOrEmpty(Registry.CurrentUser.OpenSubKey(prefPath).GetValue("PathToKoL", null).ToString())) { return false; }
 			return true;
 		}
+		private static string AskForDir() {
+            string msg = Properties.Resources.TargetFolderDialogMsg;
+            string title = Properties.Resources.TargetFolderDialogTitle;
+            MessageBoxButtons buttons = MessageBoxButtons.YesNo;
+            DialogResult nobutton = DialogResult.No;
+            MessageBoxIcon question = MessageBoxIcon.Question;
+            MessageBoxDefaultButton defaultButton = MessageBoxDefaultButton.Button1;
+            DialogResult answer = MessageBox.Show(msg, title, buttons, question, defaultButton);
+            if (answer == nobutton) {
+				return null;
+            } else {
+                using FolderBrowserDialog selectFolder = new();
+                selectFolder.SelectedPath = Environment.GetEnvironmentVariable("UserProfile") ?? @"C:\";
+                selectFolder.Description = Properties.Resources.FolderSelectTitle;
+                selectFolder.ShowNewFolderButton = true;
+                DialogResult result = selectFolder.ShowDialog();
+                if (result == DialogResult.Cancel) {
+					return null;
+                } else {
+                    return selectFolder.SelectedPath;
+                }
+            }
+        }
 		private static void InitPrefs(string prefPath) {
 			RegistryKey prefKey = Registry.CurrentUser.CreateSubKey(prefPath);
 			bool askForDir;
@@ -104,29 +127,12 @@ namespace Launch_KoLMafia {
 				askForDir = false;
 			}
 			if (askForDir) {
-				string msg = Properties.Resources.TargetFolderDialogMsg;
-				string title = Properties.Resources.TargetFolderDialogTitle;
-				MessageBoxButtons buttons = MessageBoxButtons.YesNo;
-				DialogResult nobutton = DialogResult.No;
-				MessageBoxIcon question = MessageBoxIcon.Question;
-				MessageBoxDefaultButton defaultButton = MessageBoxDefaultButton.Button1;
-				DialogResult answer = MessageBox.Show(msg, title, buttons, question, defaultButton);
-				if (answer == nobutton) {
+				string installPath = AskForDir();
+				if (installPath == null) {
 					Environment.Exit(0);
-				} else {
-					using FolderBrowserDialog selectFolder = new();
-					selectFolder.SelectedPath = Environment.GetEnvironmentVariable("UserProfile");
-					selectFolder.Description = Properties.Resources.FolderSelectTitle;
-					selectFolder.ShowNewFolderButton = true;
-					DialogResult result = selectFolder.ShowDialog();
-					if (result == DialogResult.Cancel) {
-						Environment.Exit(0);
-					} else {
-						string installPath = selectFolder.SelectedPath;
-						prefKey.SetValue("PathToKoL", installPath, RegistryValueKind.String);
-					}
 				}
-			}
+                prefKey.SetValue("PathToKoL", installPath, RegistryValueKind.String);
+            }
 			if (prefKey.GetValue("MaxDownloadAttempts",null) == null) {
 				prefKey.SetValue("MaxDownloadAttempts", 3, RegistryValueKind.DWord);
 			}
@@ -146,7 +152,6 @@ namespace Launch_KoLMafia {
 			}
 			this.SkippedVersion = prefKey.GetValue("SkippedVersion").ToString();
 		}
-#nullable enable
 	}
 	internal static class Program {
 		[DllImport("Shlwapi.dll", CharSet = CharSet.Unicode)]
@@ -154,8 +159,8 @@ namespace Launch_KoLMafia {
 			AssocF flags,
 			AssocStr str,
 			string pszAssoc,
-			string? pszExtra,
-			[Out] StringBuilder? pszOut,
+			string pszExtra,
+			[Out] StringBuilder pszOut,
 			ref uint pcchOut
 		);
 		[Flags]
@@ -205,7 +210,7 @@ namespace Launch_KoLMafia {
 		}
 		private const string KoLBaseLocation = @"https://builds.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/artifact/dist/";
 		static readonly HttpClient client = new();
-		static string? AssocQueryString(AssocStr association, string extension) {
+		static string AssocQueryString(AssocStr association, string extension) {
 			const int S_OK = 0;
 			const int S_FALSE = 1;
 
@@ -325,7 +330,6 @@ namespace Launch_KoLMafia {
 			Uri jarURI;
 			Uri fingerprintURI;
 			string[] currentList;
-			Hashtable command;
 			HashAlgorithm cryptoService = MD5.Create();
 			FileInfo currentFile = null;
 			FileInfo latestFile = null;
@@ -335,7 +339,7 @@ namespace Launch_KoLMafia {
 				killOnUpdate = args.Contains("--killOnUpdate", StringComparer.CurrentCultureIgnoreCase);
 				silent = args.Contains("--silent", StringComparer.CurrentCultureIgnoreCase);
 			}
-			Preferences preferences = new(@"Software\Sapph Tools\KoLMafia Launcher\", silent);
+			Preferences preferences = new("""Software\Sapph Tools\KoLMafia Launcher\""", silent);
 			if (!silent) {
 				string releaseVer = CheckForUpdate(preferences.SkippedVersion).ToString();
 				if (releaseVer != "") {
@@ -425,7 +429,7 @@ namespace Launch_KoLMafia {
 			} catch (HttpRequestException e) {
 				Console.WriteLine("\nException Caught!");
 				Console.WriteLine(e.Message);
-				if (!silent) {
+				if (!silent && currentFile.Exists) {
 					MessageBox.Show(Properties.Resources.RetreivalError);
 					latestFile = currentFile;
 				}
