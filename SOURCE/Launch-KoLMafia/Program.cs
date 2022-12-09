@@ -17,153 +17,6 @@ using Windows.Bits;
 
 [assembly: NeutralResourcesLanguageAttribute("en-US")]
 namespace Launch_KoLMafia {
-	public static class MyExtensions {
-
-		[return: MaybeNull]
-		public static string? Hash (this FileInfo file, 
-									HashAlgorithm cryptoService) {
-			if (!file.Exists) return null;
-			StringBuilder builder = new();
-			using (cryptoService) {
-				using (FileStream fileStream = file.Open(FileMode.Open)) {
-					fileStream.Position = 0;
-					byte[] bytes = cryptoService.ComputeHash(fileStream);
-					foreach (byte b in bytes) {
-						builder.Append(b.ToString("x2"));
-					}
-				}
-			}
-			return builder.ToString().ToLower();
-		}
-        [return: MaybeNull]
-        public static string? GetFirstMatchingDescendent(this HtmlNode? node, 
-														string ElementType, 
-														[StringSyntax(StringSyntaxAttribute.Regex)] string Pattern) {
-			if (node is null) return null;
-			foreach (HtmlNode dNode in node.Descendants(ElementType)) {
-				if (dNode.NodeType == HtmlNodeType.Element && Regex.IsMatch(dNode.InnerHtml, Pattern, RegexOptions.IgnoreCase)) {
-					return dNode.InnerHtml;
-				}
-			}
-			return null;
-		}
-        [return: MaybeNull]
-        public static HtmlNode? GetUriBody(this Uri uri) {
-			HtmlWeb web = new();
-			HtmlAgilityPack.HtmlDocument htmlDoc = web.Load(uri);
-			return htmlDoc.DocumentNode.SelectSingleNode("//body");
-		}
-	}
-	internal sealed class Preferences {
-		public required string PrefPath { get; set; }
-		public required string InstallLocation { get; set; } = "";
-		public int MaxAttempts { get; set; } = 3;
-		public bool Silent { get; set; } = false;
-		public string? SkippedVersion { get; set; } = "";
-        [SetsRequiredMembers]
-        public Preferences(string prefPath) {
-			PrefPath = prefPath;
-			this.Initialize(false);
-		}
-        [SetsRequiredMembers]
-        public Preferences(string prefPath, bool silent) {
-			PrefPath = prefPath;
-			this.Initialize(silent);
-		}
-		private void Initialize(bool silent) {
-			if (!(Preferences.PrefsExistAndNotNull(PrefPath)) && silent) {
-				throw new ArgumentException(Properties.Resources.SilentEmptyRegistryError);
-			} else if (!(Preferences.PrefsExistAndNotNull(PrefPath)) && !silent) {
-				Preferences.InitPrefs(PrefPath);
-			}
-			this.Silent = silent;
-			this.LoadVals();
-		}
-		[return: NotNull]
-		private static bool PrefsExistAndNotNull(string prefPath) {
-			if (prefPath == "") { return false; }
-			RegistryKey? prefKey = Registry.CurrentUser.OpenSubKey(prefPath);
-			if (prefKey is null) { return false; }
-			object? pathKey = prefKey.GetValue("PathToKoL", null);
-			if (pathKey is null) { return false; }
-			if (string.IsNullOrEmpty(pathKey.ToString())) { return false; }
-			return true;
-		}
-		[return: MaybeNull]
-		private static string? AskForDir() {
-			string msg = Properties.Resources.TargetFolderDialogMsg;
-			string title = Properties.Resources.TargetFolderDialogTitle;
-			MessageBoxButtons buttons = MessageBoxButtons.YesNo;
-			DialogResult nobutton = DialogResult.No;
-			MessageBoxIcon question = MessageBoxIcon.Question;
-			MessageBoxDefaultButton defaultButton = MessageBoxDefaultButton.Button1;
-			DialogResult answer = MessageBox.Show(msg, title, buttons, question, defaultButton);
-			if (answer == nobutton) {
-				return null;
-			} else {
-			    using FolderBrowserDialog selectFolder = new();
-			    selectFolder.SelectedPath = Environment.GetEnvironmentVariable("UserProfile") ?? @"C:\";
-			    selectFolder.Description = Properties.Resources.FolderSelectTitle;
-			    selectFolder.ShowNewFolderButton = true;
-			    DialogResult result = selectFolder.ShowDialog();
-			    if (result == DialogResult.Cancel) {
-					return null;
-			    } else {
-			        return selectFolder.SelectedPath;
-			    }
-			}
-        }
-		private static void InitPrefs(string prefPath) {
-			if (prefPath is null) {
-				throw new UnreachableException();
-			}
-			RegistryKey? prefKey = Registry.CurrentUser.CreateSubKey(prefPath);
-			object jarPath = prefKey.GetValue("PathToKoL", "");
-			bool askForDir;
-			if (jarPath.ToString() == "") {
-				using OpenFileDialog dialog = new();
-				dialog.InitialDirectory = Environment.GetEnvironmentVariable("UserProfile");
-				dialog.Filter = "JAR files (*.jar)| *.jar";
-				dialog.Title = Properties.Resources.JarFileSelectTitle;
-				if (dialog.ShowDialog() == DialogResult.OK || dialog.FileName is not null) {
-					FileInfo selectedJar = new(dialog.FileName);
-					string installPath = selectedJar.Directory!.Name;
-					prefKey.SetValue("PathToKoL", installPath, RegistryValueKind.String);
-					askForDir = false;
-				} else {
-					askForDir = true;
-				}
-			} else {
-				askForDir = false;
-			}
-			if (askForDir) {
-				string? installPath = AskForDir();
-				if (installPath is null) {
-					Environment.Exit(0);
-				}
-			    prefKey.SetValue("PathToKoL", installPath, RegistryValueKind.String);
-			}
-			if (prefKey.GetValue("MaxDownloadAttempts",null) is null) {
-				prefKey.SetValue("MaxDownloadAttempts", 3, RegistryValueKind.DWord);
-			}
-			if (prefKey.GetValue("SkippedVersion",null) is null) {
-				prefKey.SetValue("SkippedVersion", "", RegistryValueKind.String);
-			}
-		}
-		private void LoadVals() {
-			if (!(Preferences.PrefsExistAndNotNull(this.PrefPath))) {
-				Preferences.InitPrefs(this.PrefPath);
-			}
-			RegistryKey? prefKey = Registry.CurrentUser.OpenSubKey(PrefPath);
-			if (prefKey is null) { throw new UnreachableException(); }
-			InstallLocation = prefKey.GetValue("PathToKoL", "").ToString()!; 
-			MaxAttempts = (int)prefKey.GetValue("MaxDownloadAttempts", 3);
-			if (prefKey.GetValue("SkippedVersion",null) is null) {
-				prefKey.SetValue("SkippedVersion", "", RegistryValueKind.String);
-			}
-			this.SkippedVersion = prefKey.GetValue("SkippedVersion", "").ToString();
-		}
-	}
 	internal static class Program {
 		[DllImport("Shlwapi.dll", CharSet = CharSet.Unicode)]
 		public static extern uint AssocQueryString(
@@ -220,7 +73,9 @@ namespace Launch_KoLMafia {
 			Max
 		}
 		private const string KoLBaseLocation = @"https://builds.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/artifact/dist/";
-		static readonly HttpClient client = new();
+		// private const string KoLAPI = @"https://ci.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/api/json";
+        // artifactJSON.RootElement.GetProperty("artifacts")[0].GetProperty("relativePath").ToString();
+        static readonly HttpClient client = new();
 
         [return: MaybeNull]
         static string AssocQueryString(AssocStr association, string extension) {
@@ -249,16 +104,22 @@ namespace Launch_KoLMafia {
 								HashAlgorithm? cryptoService) {
 			DownloadManager download = new();
 			IDownloadJob job = download.CreateJob("BITS Download", URI.AbsoluteUri, Destination.FullName, Priority);
+			job.NoProgressTimeout = 20;
 			job.Resume();
 			bool jobIsFinal = false;
 			while (!jobIsFinal) {
 				DownloadStatus status = job.Status;
 				switch (status) {
 					case DownloadStatus.Error:
+					case DownloadStatus.Suspended:
+						job.Cancel();
+						return false;
 					case DownloadStatus.Transferred:
 						job.Complete();
+						jobIsFinal = true;
 						break;
 					case DownloadStatus.Cancelled:
+						return false;
 					case DownloadStatus.Acknowledged:
 						jobIsFinal = true; 
 						break;
@@ -283,7 +144,7 @@ namespace Launch_KoLMafia {
 			    object versionKey = installationKey.GetValue("Version", "");
 			    currentVersion = ("" ?? versionKey.ToString());
 			}
-			if (version is not null && currentVersion is null) {
+			if (version is not null && string.IsNullOrEmpty(currentVersion)) {
 				currentVersion = version.ToString();
 			}
 			try {
@@ -322,11 +183,8 @@ namespace Launch_KoLMafia {
 					};
 					System.Diagnostics.Process.Start(processStartInfo);
 					Environment.Exit(0);
-					return "";
 				}
-			} catch {
-				return "";
-			}
+			} catch {} 
 			return "";
 		}
 		[return: NotNull]
@@ -448,6 +306,9 @@ namespace Launch_KoLMafia {
 					while (!downloadSuccess && attempts < preferences.MaxAttempts) {
 						if (destination.Exists) { destination.Delete(); }
 						downloadSuccess = GetWebFile(jarURI, destination, DownloadPriority.Foreground, canonicalFingerprint, cryptoService);
+						downloadSuccess = downloadSuccess && 
+											destination.Exists && 
+											currentFile.Hash(cryptoService) == destination.Hash(cryptoService);
 						attempts++;
 					}
 					if (exists && downloadSuccess) {
