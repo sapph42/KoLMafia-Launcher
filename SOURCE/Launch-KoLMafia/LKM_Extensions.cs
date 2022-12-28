@@ -17,12 +17,16 @@ namespace Launch_KoLMafia {
             if (!file.Exists) return null;
             StringBuilder builder = new();
             using (cryptoService) {
-                using (FileStream fileStream = file.Open(FileMode.Open)) {
-                    fileStream.Position = 0;
-                    byte[] bytes = cryptoService.ComputeHash(fileStream);
-                    foreach (byte b in bytes) {
-                        builder.Append(b.ToString("x2"));
+                try {
+                    using (FileStream fileStream = file.Open(FileMode.Open)) {
+                        fileStream.Position = 0;
+                        byte[] bytes = cryptoService.ComputeHash(fileStream);
+                        foreach (byte b in bytes) {
+                            builder.Append(b.ToString("x2"));
+                        }
                     }
+                } catch (System.IO.IOException ex) {
+                    return null;
                 }
             }
             return builder.ToString().ToLower();

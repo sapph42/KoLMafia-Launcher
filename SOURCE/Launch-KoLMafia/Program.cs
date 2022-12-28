@@ -9,6 +9,7 @@ using System.Net.Http;
 using System.Resources;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Windows.Bits;
@@ -23,10 +24,11 @@ namespace Launch_KoLMafia {
         
 		[return: NotNull]
 		static bool GetWebFile(Uri URI, 
-								FileInfo Destination, 
-								DownloadPriority Priority, 
-								string? Fingerprint, 
-								HashAlgorithm? cryptoService) {
+			FileInfo Destination, 
+			DownloadPriority Priority, 
+			string? Fingerprint, 
+			HashAlgorithm? cryptoService
+		) {
 			DownloadManager download = new();
 			IDownloadJob job = download.CreateJob("BITS Download", URI.AbsoluteUri, Destination.FullName, Priority);
 			job.NoProgressTimeout = 20;
@@ -126,6 +128,10 @@ namespace Launch_KoLMafia {
 			}
 		}
 		static void Main(string[] args) {
+
+			Application.ThreadException += new ThreadExceptionEventHandler(Application_ThreadException);
+			AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
+
 			bool noLaunch = false;
 			bool killOnUpdate = false;
 			bool silent = false;
@@ -160,7 +166,7 @@ namespace Launch_KoLMafia {
 					Environment.Exit(42);
 				}
 			}
-			if (javaName == "" && Process.GetProcessesByName(javaName).Length > 0) {
+			if (javaName != "" && Process.GetProcessesByName(javaName).Length > 0) {
 				if (silent) {
 					Environment.Exit(43);
 				}
@@ -268,5 +274,28 @@ namespace Launch_KoLMafia {
 				}
 			}
 		}
+
+		static void Application_ThreadException(object sender, ThreadExceptionEventArgs e) {
+			// Log the exception, display it, etc
+			Debug.WriteLine(e.Exception.Message);
+			Console.WriteLine(e.Exception.Message+ Environment.NewLine);
+			Console.WriteLine(e.Exception.InnerException);
+			Console.WriteLine(e.Exception.StackTrace);
+		}
+
+		static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e) {
+			Exception ex;
+			if (e is not null && e.ExceptionObject is not null) {
+				ex = (Exception)e.ExceptionObject;
+			} else {
+				return;
+			}
+			Debug.WriteLine(ex.Message);
+			Console.WriteLine(ex.Message + Environment.NewLine);
+			Console.WriteLine(ex.InnerException);
+			Console.WriteLine(ex.StackTrace);
+		}
+
+
 	}
 }
