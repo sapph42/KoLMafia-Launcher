@@ -123,6 +123,12 @@
   <data name="DownloadToNewConfirmTitle" xml:space="preserve">
     <value>Mafia Not Found!</value>
   </data>
+  <data name="ErrorBitsException" xml:space="preserve">
+    <value>BITS exception {0:X} {1}</value>
+  </data>
+  <data name="ErrorTitle" xml:space="preserve">
+    <value>Error</value>
+  </data>
   <data name="FolderSelectTitle" xml:space="preserve">
     <value>Select where you want to install KoLMafia</value>
   </data>
@@ -131,6 +137,9 @@
   </data>
   <data name="NewVersionDialogMsg" xml:space="preserve">
     <value>An updated version({0}) of KoLMafia Launcher is available! Update now? (Or skip this release ?)</value>
+  </data>
+  <data name="NewVersionDialogMsgNoSkip" xml:space="preserve">
+    <value>An updated version({0}) of KoLMafia Launcher is available! Update now?</value>
   </data>
   <data name="NewVersionDialogTitle" xml:space="preserve">
     <value>Update available!</value>
@@ -144,6 +153,9 @@
   <data name="RetreivalError" xml:space="preserve">
     <value>Received a error when attempting to retreive and/or save the latest version. Your previous version has been kept, and will now be run.</value>
   </data>
+  <data name="RetreivalErrorTitle" xml:space="preserve">
+    <value>Retreival error!</value>
+  </data>
   <data name="SilentEmptyRegistryError" xml:space="preserve">
     <value>No registry config found, silence precludes requesting install location.</value>
   </data>
@@ -152,5 +164,11 @@
   </data>
   <data name="TargetFolderDialogTitle" xml:space="preserve">
     <value>No file selected</value>
+  </data>
+  <data name="UnauthorizedAccessMessage" xml:space="preserve">
+    <value>You don't have authorization to access that file</value>
+  </data>
+  <data name="UnauthorizedAccessTitle" xml:space="preserve">
+    <value>Unauthorized Access</value>
   </data>
 </root>

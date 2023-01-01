@@ -79,6 +79,24 @@ namespace Launch_KoLMafia.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to BITS exception {0:X} {1}.
+        /// </summary>
+        internal static string ErrorBitsException {
+            get {
+                return ResourceManager.GetString("ErrorBitsException", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Error.
+        /// </summary>
+        internal static string ErrorTitle {
+            get {
+                return ResourceManager.GetString("ErrorTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Select where you want to install KoLMafia.
         /// </summary>
         internal static string FolderSelectTitle {
@@ -102,6 +120,15 @@ namespace Launch_KoLMafia.Properties {
         internal static string NewVersionDialogMsg {
             get {
                 return ResourceManager.GetString("NewVersionDialogMsg", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to An updated version({0}) of KoLMafia Launcher is available! Update now?.
+        /// </summary>
+        internal static string NewVersionDialogMsgNoSkip {
+            get {
+                return ResourceManager.GetString("NewVersionDialogMsgNoSkip", resourceCulture);
             }
         }
         
@@ -142,6 +169,15 @@ namespace Launch_KoLMafia.Properties {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Retreival error!.
+        /// </summary>
+        internal static string RetreivalErrorTitle {
+            get {
+                return ResourceManager.GetString("RetreivalErrorTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to No registry config found, silence precludes requesting install location..
         /// </summary>
         internal static string SilentEmptyRegistryError {
@@ -165,6 +201,24 @@ namespace Launch_KoLMafia.Properties {
         internal static string TargetFolderDialogTitle {
             get {
                 return ResourceManager.GetString("TargetFolderDialogTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to You don&apos;t have authorization to access that file.
+        /// </summary>
+        internal static string UnauthorizedAccessMessage {
+            get {
+                return ResourceManager.GetString("UnauthorizedAccessMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Unauthorized Access.
+        /// </summary>
+        internal static string UnauthorizedAccessTitle {
+            get {
+                return ResourceManager.GetString("UnauthorizedAccessTitle", resourceCulture);
             }
         }
     }

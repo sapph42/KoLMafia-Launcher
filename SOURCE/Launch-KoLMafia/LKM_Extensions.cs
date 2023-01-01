@@ -1,13 +1,10 @@
 ﻿using HtmlAgilityPack;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
-using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
 namespace Launch_KoLMafia {
     internal static class LKM_Extensions {
@@ -18,14 +15,13 @@ namespace Launch_KoLMafia {
             StringBuilder builder = new();
             using (cryptoService) {
                 try {
-                    using (FileStream fileStream = file.Open(FileMode.Open)) {
-                        fileStream.Position = 0;
-                        byte[] bytes = cryptoService.ComputeHash(fileStream);
-                        foreach (byte b in bytes) {
-                            builder.Append(b.ToString("x2"));
-                        }
-                    }
-                } catch (System.IO.IOException ex) {
+					using FileStream fileStream = file.Open(FileMode.Open);
+					fileStream.Position = 0;
+					byte[] bytes = cryptoService.ComputeHash(fileStream);
+					foreach (byte b in bytes) {
+						builder.Append(b.ToString("x2"));
+					}
+				} catch (System.IO.IOException) {
                     return null;
                 }
             }

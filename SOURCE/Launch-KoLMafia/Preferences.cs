@@ -4,6 +4,9 @@ using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics;
 using System.IO;
 using System.Windows.Forms;
+using System.Security.AccessControl;
+using System.Linq;
+using System.Security.Principal;
 
 namespace Launch_KoLMafia {
     internal sealed class Preferences {
@@ -11,7 +14,16 @@ namespace Launch_KoLMafia {
         public string InstallLocation { get; private set; } = "";
         public int MaxAttempts { get; private set; } = 3;
         public bool Silent { get; private set; } = false;
-        public string? SkippedVersion { get; set; }
+        private string? _skippedVersion;
+        public string? SkippedVersion {
+            get { return _skippedVersion; }
+            set {
+                if (value is null) throw new ArgumentNullException(nameof(value));
+				RegistryKey prefKey = Registry.CurrentUser.OpenSubKey(PrefPath, true)!;
+				prefKey.SetValue("SkippedVersion", value, RegistryValueKind.String);
+                _skippedVersion = value;
+			} 
+        }
         [SetsRequiredMembers]
         public Preferences(string prefPath) {
             PrefPath = prefPath;
@@ -21,6 +33,27 @@ namespace Launch_KoLMafia {
         public Preferences(string prefPath, bool silent) {
             PrefPath = prefPath;
             this.Initialize(silent);
+        }
+
+        public bool ConfirmPermissions() {
+            if (!Preferences.PrefsExistAndNotNull(PrefPath)) return false; 
+            RegistryKey prefKey = Registry.CurrentUser.OpenSubKey(PrefPath)!;
+            RegistrySecurity prefKeySec = prefKey.GetAccessControl();
+            AuthorizationRuleCollection rules = prefKeySec.GetAccessRules(true, true, typeof(System.Security.Principal.NTAccount));
+            string thisUser = WindowsIdentity.GetCurrent().Name;
+
+			foreach (var rule in rules.Cast<RegistryAccessRule>()) {
+                if (rule.IdentityReference.Value == thisUser) {
+                    if (rule.AccessControlType == AccessControlType.Allow &&
+                    (rule.RegistryRights == RegistryRights.FullControl ||
+                    rule.RegistryRights == RegistryRights.WriteKey)) {
+                        return true;
+                    }
+                } else {
+                    continue;
+                }
+            }
+			return false;
         }
         private void Initialize(bool silent) {
             if (!(Preferences.PrefsExistAndNotNull(PrefPath)) && silent) {
@@ -32,7 +65,7 @@ namespace Launch_KoLMafia {
             this.LoadVals();
         }
         [return: NotNull]
-        private static bool PrefsExistAndNotNull(string prefPath) {
+        private static bool PrefsExistAndNotNull([NotNullWhen(true)]string prefPath) {
             if (prefPath == "") { return false; }
             RegistryKey? prefKey = Registry.CurrentUser.OpenSubKey(prefPath);
             if (prefKey is null) { return false; }
@@ -113,7 +146,7 @@ namespace Launch_KoLMafia {
             if (prefKey.GetValue("SkippedVersion", null) is null) {
                 prefKey.SetValue("SkippedVersion", "", RegistryValueKind.String);
             }
-            this.SkippedVersion = prefKey.GetValue("SkippedVersion", "").ToString();
+            _skippedVersion = prefKey.GetValue("SkippedVersion", "").ToString();
         }
     }
 }

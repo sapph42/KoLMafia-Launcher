@@ -20,14 +20,15 @@ namespace Launch_KoLMafia {
         private const string KoLBaseLocation = @"https://builds.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/artifact/dist/";
         // private const string KoLAPI = @"https://ci.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/api/json";
         // artifactJSON.RootElement.GetProperty("artifacts")[0].GetProperty("relativePath").ToString();
-        static readonly HttpClient client = new();
-        
+		static readonly HttpClient client = new();
+		static readonly HashAlgorithm cryptoService = MD5.Create();
+		private static Preferences preferences = null!;
+
 		[return: NotNull]
 		static bool GetWebFile(Uri URI, 
 			FileInfo Destination, 
 			DownloadPriority Priority, 
-			string? Fingerprint, 
-			HashAlgorithm? cryptoService
+			string? Fingerprint
 		) {
 			DownloadManager download = new();
 			IDownloadJob job = download.CreateJob("BITS Download", URI.AbsoluteUri, Destination.FullName, Priority);
@@ -86,7 +87,12 @@ namespace Launch_KoLMafia {
 			if (releaseVersion == currentVersion || releaseVersion == SkippedVersion) {
 				return "";
 			}
-			string msg = string.Format(Properties.Resources.NewVersionDialogMsg, releaseVersion);
+			string msg = "";
+			if (preferences.ConfirmPermissions()) {
+				msg = string.Format(Properties.Resources.NewVersionDialogMsg, releaseVersion);
+			} else {
+				msg = string.Format(Properties.Resources.NewVersionDialogMsgNoSkip, releaseVersion);
+			}
 			string title = Properties.Resources.NewVersionDialogTitle;
 			MessageBoxButtons buttons = MessageBoxButtons.YesNo;
 			DialogResult nobutton = DialogResult.No;
@@ -100,7 +106,7 @@ namespace Launch_KoLMafia {
 			Uri sourceURI = new($"https://github.com/sapph42/KoLMafia-Launcher/raw/main/{targetInstallerName}");
 			FileInfo destination = new(Environment.GetEnvironmentVariable("Temp") + @"\" + targetInstallerName);
 			try {
-				if (GetWebFile(sourceURI, destination, DownloadPriority.Foreground, null, null)) {
+				if (GetWebFile(sourceURI, destination, DownloadPriority.Foreground, null)) {
 					ProcessStartInfo processStartInfo = new() {
 						FileName = destination.FullName,
 						WorkingDirectory = Environment.GetEnvironmentVariable("Temp"),
@@ -143,7 +149,6 @@ namespace Launch_KoLMafia {
 			Uri jarURI;
 			Uri fingerprintURI;
 			string[] currentList;
-			HashAlgorithm cryptoService = MD5.Create();
 			FileInfo currentFile = null!;
 			FileInfo latestFile = null!;
 
@@ -152,10 +157,10 @@ namespace Launch_KoLMafia {
 				killOnUpdate = args.Contains("--killOnUpdate", StringComparer.CurrentCultureIgnoreCase);
 				silent = args.Contains("--silent", StringComparer.CurrentCultureIgnoreCase);
 			}
-			Preferences preferences = new("""Software\Sapph Tools\KoLMafia Launcher\""", silent);
+			preferences = new("""Software\Sapph Tools\KoLMafia Launcher\""", silent);
 			if (!silent) {
 				string releaseVer = CheckForUpdate(preferences.SkippedVersion).ToString();
-				if (releaseVer != "") {
+				if (releaseVer != "" && preferences.ConfirmPermissions()) {
 					preferences.SkippedVersion = releaseVer;
 				}
 			}
@@ -233,21 +238,38 @@ namespace Launch_KoLMafia {
 						(currentFile.Hash(cryptoService) != canonicalFingerprint))) {
 					int attempts = 1;
 					FileInfo destination = new(preferences.InstallLocation + @"\" + latestJARName);
-					bool downloadSuccess = GetWebFile(jarURI, destination, DownloadPriority.Foreground, canonicalFingerprint, cryptoService);
+					bool downloadSuccess = GetWebFile(jarURI, destination, DownloadPriority.Foreground, canonicalFingerprint);
 					while (!downloadSuccess && attempts < preferences.MaxAttempts) {
 						if (destination.Exists) { destination.Delete(); }
-						downloadSuccess = GetWebFile(jarURI, destination, DownloadPriority.Foreground, canonicalFingerprint, cryptoService);
+						downloadSuccess = GetWebFile(jarURI, destination, DownloadPriority.Foreground, canonicalFingerprint);
 						downloadSuccess = downloadSuccess && 
 											destination.Exists && 
 											currentFile.Hash(cryptoService) == destination.Hash(cryptoService);
 						attempts++;
 					}
-					if (exists && downloadSuccess) {
-						currentFile.Delete();
+					if (downloadSuccess) {
+						if (exists) currentFile.Delete();
 						latestFile = destination;
+					} else {
+						string title = Properties.Resources.RetreivalErrorTitle;
+						string msg = Properties.Resources.RetreivalError;
+						MessageBoxButtons buttons = MessageBoxButtons.OKCancel;
+						MessageBoxDefaultButton defaultButton = MessageBoxDefaultButton.Button1;
+						MessageBoxIcon messageBoxIcon = MessageBoxIcon.Error;
+						DialogResult result = MessageBox.Show(msg, title, buttons, messageBoxIcon, defaultButton);
+						if (result == DialogResult.Cancel) {
+							MessageBox.Show($"Attempts: {attempts}\r\nSuccess: {downloadSuccess}\r\nExits: {exists}\r\nCF: {canonicalFingerprint}\r\nDownload Exists: {destination.Exists}\r\nDF: {destination.Hash(cryptoService) ?? "N/A"}", "Troubleshooting Info");
+							if (destination.Exists) destination.Delete();
+							Environment.Exit(0);
+						} else {
+							latestFile = currentFile;
+						}
 					}
 				} else {
 					latestFile = currentFile;
+				}
+				if (currentFile is null) {
+					throw new UnreachableException("Heisenbug found determining current Mafia JAR and/or replacing it.");
 				}
 			} catch (HttpRequestException e) {
 				Console.WriteLine("\nException Caught!");
@@ -256,6 +278,9 @@ namespace Launch_KoLMafia {
 					MessageBox.Show(Properties.Resources.RetreivalError);
 					latestFile = currentFile;
 				}
+				if (currentFile is null) {
+					throw new UnreachableException("Heisenbug found determining current Mafia JAR and/or replacing it.");
+				}
 			} catch (ExternalException e) {
 			    Console.WriteLine("\nException Caught!");
 			    Console.WriteLine(e.Message);
@@ -263,6 +288,9 @@ namespace Launch_KoLMafia {
 			        MessageBox.Show(Properties.Resources.RetreivalError);
 			        latestFile = currentFile;
 			    }
+				if (currentFile is null) {
+					throw new UnreachableException("Heisenbug found determining current Mafia JAR and/or replacing it.");
+				}
 			} finally {
 				if (!noLaunch) {
 					ProcessStartInfo processStartInfo = new() {
