@@ -13,27 +13,29 @@ namespace Launch_KoLMafia {
                                     HashAlgorithm cryptoService) {
             if (!file.Exists) return null;
             StringBuilder builder = new();
-            using (cryptoService) {
-                try {
-					using FileStream fileStream = file.Open(FileMode.Open);
-					fileStream.Position = 0;
-					byte[] bytes = cryptoService.ComputeHash(fileStream);
-					foreach (byte b in bytes) {
-						builder.Append(b.ToString("x2"));
-					}
-				} catch (System.IO.IOException) {
-                    return null;
-                }
-            }
+            try {
+				using FileStream fileStream = file.Open(FileMode.Open);
+				fileStream.Position = 0;
+				byte[] bytes = cryptoService.ComputeHash(fileStream);
+				foreach (byte b in bytes) {
+					builder.Append(b.ToString("x2"));
+				}
+			} catch (System.IO.IOException) {
+                return null;
+            }          
             return builder.ToString().ToLower();
         }
         [return: MaybeNull]
         public static string? GetFirstMatchingDescendent(this HtmlNode? node,
                                                         string ElementType,
-                                                        [StringSyntax(StringSyntaxAttribute.Regex)] string Pattern) {
+                                                        [StringSyntax(StringSyntaxAttribute.Regex)] string Pattern,
+                                                        bool MatchOnly = false) {
             if (node is null) return null;
             foreach (HtmlNode dNode in node.Descendants(ElementType)) {
                 if (dNode.NodeType == HtmlNodeType.Element && Regex.IsMatch(dNode.InnerHtml, Pattern, RegexOptions.IgnoreCase)) {
+                    if (MatchOnly) {
+                        return Regex.Match(dNode.InnerHtml, Pattern, RegexOptions.IgnoreCase).Captures[0].Value;
+                    }
                     return dNode.InnerHtml;
                 }
             }

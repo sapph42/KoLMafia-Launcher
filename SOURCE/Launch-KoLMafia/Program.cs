@@ -25,7 +25,7 @@ namespace Launch_KoLMafia {
 		private static Preferences preferences = null!;
 
 		[return: NotNull]
-		static bool GetWebFile(Uri URI, 
+		static int GetWebFile(Uri URI, 
 			FileInfo Destination, 
 			DownloadPriority Priority, 
 			string? Fingerprint
@@ -41,13 +41,13 @@ namespace Launch_KoLMafia {
 					case DownloadStatus.Error:
 					case DownloadStatus.Suspended:
 						job.Cancel();
-						return false;
+						return 500;
 					case DownloadStatus.Transferred:
 						job.Complete();
 						jobIsFinal = true;
 						break;
 					case DownloadStatus.Cancelled:
-						return false;
+						return 100;
 					case DownloadStatus.Acknowledged:
 						jobIsFinal = true; 
 						break;
@@ -57,8 +57,13 @@ namespace Launch_KoLMafia {
 				}
 			}
 			if (Fingerprint is not null && cryptoService is not null) {
-				return Destination.Hash(cryptoService) == Fingerprint;
-			} else return true;
+				string destinationHash = Destination.Hash(cryptoService)!;
+				if (destinationHash == Fingerprint) {
+					return 200;
+				} else {
+					return 404;
+				}
+			} else return 200;
 		}
 		[return: NotNull]
 		static string CheckForUpdate(string? SkippedVersion) {
@@ -106,7 +111,7 @@ namespace Launch_KoLMafia {
 			Uri sourceURI = new($"https://github.com/sapph42/KoLMafia-Launcher/raw/main/{targetInstallerName}");
 			FileInfo destination = new(Environment.GetEnvironmentVariable("Temp") + @"\" + targetInstallerName);
 			try {
-				if (GetWebFile(sourceURI, destination, DownloadPriority.Foreground, null)) {
+				if (GetWebFile(sourceURI, destination, DownloadPriority.Foreground, null)==200) {
 					ProcessStartInfo processStartInfo = new() {
 						FileName = destination.FullName,
 						WorkingDirectory = Environment.GetEnvironmentVariable("Temp"),
@@ -230,7 +235,7 @@ namespace Launch_KoLMafia {
 				jarURI = new(KoLBaseLocation.AbsoluteUri + latestJARName);
 				fingerprintURI = new(jarURI.AbsoluteUri + @"/*fingerprint*/");
 
-				canonicalFingerprint = fingerprintURI.GetUriBody().GetFirstMatchingDescendent("li", @"[a-z0-9]{32}") ?? "";
+				canonicalFingerprint = fingerprintURI.GetUriBody().GetFirstMatchingDescendent("li", @"[a-z0-9]{32}", true) ?? "";
 
 				if (!exists || 
 					(currentFile.Name != latestJARName) || 
@@ -238,11 +243,12 @@ namespace Launch_KoLMafia {
 						(currentFile.Hash(cryptoService) != canonicalFingerprint))) {
 					int attempts = 1;
 					FileInfo destination = new(preferences.InstallLocation + @"\" + latestJARName);
-					bool downloadSuccess = GetWebFile(jarURI, destination, DownloadPriority.Foreground, canonicalFingerprint);
-					while (!downloadSuccess && attempts < preferences.MaxAttempts) {
+					int downloadStatus = GetWebFile(jarURI, destination, DownloadPriority.Foreground, canonicalFingerprint);
+					bool downloadSuccess = downloadStatus == 200;
+					while (downloadStatus != 200 && attempts < preferences.MaxAttempts) {
 						if (destination.Exists) { destination.Delete(); }
-						downloadSuccess = GetWebFile(jarURI, destination, DownloadPriority.Foreground, canonicalFingerprint);
-						downloadSuccess = downloadSuccess && 
+						downloadStatus = GetWebFile(jarURI, destination, DownloadPriority.Foreground, canonicalFingerprint);
+						downloadSuccess = downloadStatus == 200 && 
 											destination.Exists && 
 											currentFile.Hash(cryptoService) == destination.Hash(cryptoService);
 						attempts++;
@@ -251,18 +257,22 @@ namespace Launch_KoLMafia {
 						if (exists) currentFile.Delete();
 						latestFile = destination;
 					} else {
-						string title = Properties.Resources.RetreivalErrorTitle;
-						string msg = Properties.Resources.RetreivalError;
-						MessageBoxButtons buttons = MessageBoxButtons.OKCancel;
-						MessageBoxDefaultButton defaultButton = MessageBoxDefaultButton.Button1;
-						MessageBoxIcon messageBoxIcon = MessageBoxIcon.Error;
-						DialogResult result = MessageBox.Show(msg, title, buttons, messageBoxIcon, defaultButton);
-						if (result == DialogResult.Cancel) {
-							MessageBox.Show($"Attempts: {attempts}\r\nSuccess: {downloadSuccess}\r\nExits: {exists}\r\nCF: {canonicalFingerprint}\r\nDownload Exists: {destination.Exists}\r\nDF: {destination.Hash(cryptoService) ?? "N/A"}", "Troubleshooting Info");
-							if (destination.Exists) destination.Delete();
-							Environment.Exit(0);
+						if (!silent) {
+							string title = Properties.Resources.RetreivalErrorTitle;
+							string msg = Properties.Resources.RetreivalError;
+							MessageBoxButtons buttons = MessageBoxButtons.OKCancel;
+							MessageBoxDefaultButton defaultButton = MessageBoxDefaultButton.Button1;
+							MessageBoxIcon messageBoxIcon = MessageBoxIcon.Error;
+							DialogResult result = MessageBox.Show(msg, title, buttons, messageBoxIcon, defaultButton);
+							if (result == DialogResult.Cancel) {
+								MessageBox.Show($"Attempts: {attempts}\r\nSuccess: {downloadSuccess}\r\nExits: {exists}\r\nCF: {canonicalFingerprint}\r\nDownload Exists: {destination.Exists}\r\nDF: {destination.Hash(cryptoService) ?? "N/A"}", "Troubleshooting Info");
+								if (destination.Exists) destination.Delete();
+								Environment.Exit(0);
+							} else {
+								latestFile = currentFile;
+							}
 						} else {
-							latestFile = currentFile;
+							Environment.Exit(269);
 						}
 					}
 				} else {
