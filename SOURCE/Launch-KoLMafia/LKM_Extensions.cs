@@ -47,5 +47,23 @@ namespace Launch_KoLMafia {
             HtmlAgilityPack.HtmlDocument htmlDoc = web.Load(uri);
             return htmlDoc.DocumentNode.SelectSingleNode("//body");
         }
+
+        public static bool IsGreater(this Version leftVersion, Version rightVersion) {
+            if (leftVersion is null) return false;
+            if (rightVersion is null) return false;
+            if (leftVersion.Major > rightVersion.Major) {
+                return true;
+            }
+            if (leftVersion.Minor > rightVersion.Minor) {
+                return true;
+            }
+            if (leftVersion.Build > rightVersion.Build) {
+                return true;
+            }
+            if (leftVersion.Revision > rightVersion.Revision) {
+                return true;
+            }
+            return false;
+        }
     }
 }

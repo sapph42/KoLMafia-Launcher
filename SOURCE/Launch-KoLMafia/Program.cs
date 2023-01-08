@@ -10,52 +10,30 @@ using System.Resources;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Forms;
-using Windows.Bits;
 
 [assembly: NeutralResourcesLanguageAttribute("en-US")]
 namespace Launch_KoLMafia {
 	internal static class Program {
-        private const string KoLBaseLocation = @"https://builds.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/artifact/dist/";
-        // private const string KoLAPI = @"https://ci.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/api/json";
-        // artifactJSON.RootElement.GetProperty("artifacts")[0].GetProperty("relativePath").ToString();
+		private const string KoLBaseLocation = @"https://builds.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/artifact/dist/";
+		// private const string KoLAPI = @"https://ci.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/api/json";
+		// artifactJSON.RootElement.GetProperty("artifacts")[0].GetProperty("relativePath").ToString();
 		static readonly HttpClient client = new();
 		static readonly HashAlgorithm cryptoService = MD5.Create();
 		private static Preferences preferences = null!;
 
 		[return: NotNull]
+
+		static async void DownloadFileAsync(Uri uri, FileInfo Destination) {
+			byte[] fileBytes = await client.GetByteArrayAsync(uri);
+			File.WriteAllBytes(Destination.FullName, fileBytes);
+		}
 		static int GetWebFile(Uri URI, 
 			FileInfo Destination, 
-			DownloadPriority Priority, 
 			string? Fingerprint
 		) {
-			DownloadManager download = new();
-			IDownloadJob job = download.CreateJob("BITS Download", URI.AbsoluteUri, Destination.FullName, Priority);
-			job.NoProgressTimeout = 20;
-			job.Resume();
-			bool jobIsFinal = false;
-			while (!jobIsFinal) {
-				DownloadStatus status = job.Status;
-				switch (status) {
-					case DownloadStatus.Error:
-					case DownloadStatus.Suspended:
-						job.Cancel();
-						return 500;
-					case DownloadStatus.Transferred:
-						job.Complete();
-						jobIsFinal = true;
-						break;
-					case DownloadStatus.Cancelled:
-						return 100;
-					case DownloadStatus.Acknowledged:
-						jobIsFinal = true; 
-						break;
-					default:
-						Task.Delay(500);
-						break;
-				}
-			}
+			DownloadFileAsync(URI, Destination);
+			if (!Destination.Exists) { return 500; }
 			if (Fingerprint is not null && cryptoService is not null) {
 				string destinationHash = Destination.Hash(cryptoService)!;
 				if (destinationHash == Fingerprint) {
@@ -66,37 +44,37 @@ namespace Launch_KoLMafia {
 			} else return 200;
 		}
 		[return: NotNull]
-		static string CheckForUpdate(string? SkippedVersion) {
-			SkippedVersion ??= "";
+		static string CheckForUpdate(string? RegSkippedVersion) {
+			Version? skippedVersion;
+			if (RegSkippedVersion is null) {
+				skippedVersion = new Version("0.0.0.0");
+			} else if (!Version.TryParse(RegSkippedVersion, out skippedVersion)) {
+				skippedVersion = new Version("0.0.0.0");
+			} 
 			RegistryKey? installationKey = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\WOW6432Node\Sapph Tools\KoLMafia Launcher");
-			string currentVersion = null!;
 			Uri versionURI = new("https://raw.githubusercontent.com/sapph42/KoLMafia-Launcher/main/version.txt");
-			string releaseVersion;
-			Version? version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-			if (installationKey is not null) {
-			    object versionKey = installationKey.GetValue("Version", "");
-			    currentVersion = ("" ?? versionKey.ToString());
-			}
-			if (version is not null && string.IsNullOrEmpty(currentVersion)) {
-				currentVersion = version.ToString();
-			}
+			Version? releaseVersion;
+			Version version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!;
 			try {
 				HttpRequestMessage webRequest = new(HttpMethod.Get, versionURI);
 				HttpResponseMessage response = client.Send(webRequest);
-				releaseVersion = response.Content.ReadAsStringAsync().Result.Trim();
+				if (!Version.TryParse(response.Content.ReadAsStringAsync().Result.Trim(), out releaseVersion)) {
+					Console.WriteLine("\nException Caught!");
+					return "";
+				}
 			} catch (HttpRequestException e) {
 				Console.WriteLine("\nException Caught!");
 				Console.WriteLine(e.Message);
 				return "";
 			}
-			if (releaseVersion == currentVersion || releaseVersion == SkippedVersion) {
+			if (releaseVersion.Equals(version) || releaseVersion.Equals(skippedVersion) || version.IsGreater(releaseVersion)) {
 				return "";
 			}
 			string msg = "";
 			if (preferences.ConfirmPermissions()) {
-				msg = string.Format(Properties.Resources.NewVersionDialogMsg, releaseVersion);
+				msg = string.Format(Properties.Resources.NewVersionDialogMsg, releaseVersion.ToString());
 			} else {
-				msg = string.Format(Properties.Resources.NewVersionDialogMsgNoSkip, releaseVersion);
+				msg = string.Format(Properties.Resources.NewVersionDialogMsgNoSkip, releaseVersion.ToString());
 			}
 			string title = Properties.Resources.NewVersionDialogTitle;
 			MessageBoxButtons buttons = MessageBoxButtons.YesNo;
@@ -105,13 +83,13 @@ namespace Launch_KoLMafia {
 			MessageBoxDefaultButton defaultbutton = MessageBoxDefaultButton.Button1;
 			DialogResult result = MessageBox.Show(msg, title, buttons, icon, defaultbutton);
 			if (result == nobutton) {
-				return releaseVersion;
+				return releaseVersion.ToString();
 			}
 			string targetInstallerName = $"KoLMafia-Launcher_{releaseVersion}.exe";
 			Uri sourceURI = new($"https://github.com/sapph42/KoLMafia-Launcher/raw/main/{targetInstallerName}");
 			FileInfo destination = new(Environment.GetEnvironmentVariable("Temp") + @"\" + targetInstallerName);
 			try {
-				if (GetWebFile(sourceURI, destination, DownloadPriority.Foreground, null)==200) {
+				if (GetWebFile(sourceURI, destination, null)==200) {
 					ProcessStartInfo processStartInfo = new() {
 						FileName = destination.FullName,
 						WorkingDirectory = Environment.GetEnvironmentVariable("Temp"),
@@ -243,11 +221,11 @@ namespace Launch_KoLMafia {
 						(currentFile.Hash(cryptoService) != canonicalFingerprint))) {
 					int attempts = 1;
 					FileInfo destination = new(preferences.InstallLocation + @"\" + latestJARName);
-					int downloadStatus = GetWebFile(jarURI, destination, DownloadPriority.Foreground, canonicalFingerprint);
+					int downloadStatus = GetWebFile(jarURI, destination, canonicalFingerprint);
 					bool downloadSuccess = downloadStatus == 200;
 					while (downloadStatus != 200 && attempts < preferences.MaxAttempts) {
 						if (destination.Exists) { destination.Delete(); }
-						downloadStatus = GetWebFile(jarURI, destination, DownloadPriority.Foreground, canonicalFingerprint);
+						downloadStatus = GetWebFile(jarURI, destination, canonicalFingerprint);
 						downloadSuccess = downloadStatus == 200 && 
 											destination.Exists && 
 											currentFile.Hash(cryptoService) == destination.Hash(cryptoService);
