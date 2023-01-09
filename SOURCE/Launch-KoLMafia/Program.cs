@@ -24,8 +24,10 @@ namespace Launch_KoLMafia {
 
 		[return: NotNull]
 
-		static async void DownloadFileAsync(Uri uri, FileInfo Destination) {
-			byte[] fileBytes = await client.GetByteArrayAsync(uri);
+		static void DownloadFileAsync(Uri uri, FileInfo Destination) {
+			HttpRequestMessage webRequest = new(HttpMethod.Get, uri);
+			HttpResponseMessage response = client.Send(webRequest);
+			byte[] fileBytes = response.Content.ReadAsByteArrayAsync().Result;
 			File.WriteAllBytes(Destination.FullName, fileBytes);
 		}
 		static int GetWebFile(Uri URI, 

@@ -10,7 +10,7 @@
     <ApplicationIcon>icon.ico</ApplicationIcon>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
     <SignAssembly>True</SignAssembly>
-    <Version>5.0.10.0</Version>
+    <Version>5.0.11.0</Version>
     <PackageReadmeFile>README.md</PackageReadmeFile>
 	<Nullable>enable</Nullable>
   </PropertyGroup>
