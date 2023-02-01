@@ -148,8 +148,7 @@ namespace Launch_KoLMafia {
 				prefKey.SetValue("SkippedVersion", "", RegistryValueKind.String);
 			}
 			_skippedVersion = prefKey.GetValue("SkippedVersion", "").ToString();
-			string AssemblyPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
-			string AssemblyDir = Path.GetDirectoryName(AssemblyPath)!;
+			string AssemblyDir = AppContext.BaseDirectory;
 			string[] Runtimes = Directory.GetFiles(AssemblyDir, "vcruntime*.dll");
 			if (Runtimes.Count() > 0) {
 				Standalone = true;
