@@ -14,6 +14,7 @@ namespace Launch_KoLMafia {
 		public string InstallLocation { get; private set; } = "";
 		public int MaxAttempts { get; private set; } = 3;
 		public bool Silent { get; private set; } = false;
+		public bool Standalone { get; private set; } = false;
 		private string? _skippedVersion;
 		public string? SkippedVersion {
 			get { return _skippedVersion; }
@@ -147,6 +148,14 @@ namespace Launch_KoLMafia {
 				prefKey.SetValue("SkippedVersion", "", RegistryValueKind.String);
 			}
 			_skippedVersion = prefKey.GetValue("SkippedVersion", "").ToString();
+			string AssemblyPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+			string AssemblyDir = Path.GetDirectoryName(AssemblyPath)!;
+			string[] Runtimes = Directory.GetFiles(AssemblyDir, "vcruntime*.dll");
+			if (Runtimes.Count() > 0) {
+				Standalone = true;
+			} else {
+				Standalone = false;
+			}
 		}
 	}
 }

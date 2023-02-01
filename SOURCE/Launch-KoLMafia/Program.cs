@@ -87,7 +87,11 @@ namespace Launch_KoLMafia {
 			if (result == nobutton) {
 				return releaseVersion.ToString();
 			}
-			string targetInstallerName = $"KoLMafia-Launcher_{releaseVersion}.exe";
+            string targetInstallerName = $"KoLMafia-Launcher_{releaseVersion}.exe";
+            if (preferences.Standalone) {
+                targetInstallerName = $"KoLMafia-Launcher_standalone_{releaseVersion}.exe";
+            }
+			
 			Uri sourceURI = new($"https://github.com/sapph42/KoLMafia-Launcher/raw/main/{targetInstallerName}");
 			FileInfo destination = new(Environment.GetEnvironmentVariable("Temp") + @"\" + targetInstallerName);
 			try {
