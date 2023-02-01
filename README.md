@@ -43,4 +43,5 @@ tptb were good enough to let me whip up an icon that incorporates their IP for u
 
 ## Requirements
 
-* .NET 7.0
+* .NET 7.0 for base installer
+* None for standalone installer
