@@ -5,7 +5,9 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Net.NetworkInformation;
 using System.Resources;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -23,7 +25,27 @@ namespace Launch_KoLMafia {
 		private static Preferences preferences = null!;
 
 		[return: NotNull]
+		private static bool IsInternetAvailable() {
+			const string NCSI_TEST_URL = @"http://www.msftncsi.com/ncsi.txt";
+			const string NCSI_TEST_RESULT = @"Microsoft NCSI";
+			const string NCSI_DNS = @"dns.msftncsi.com";
+			const string NCSI_DNS_IP_ADDRESS = @"131.107.255.255";
 
+			try {
+                HttpRequestMessage webRequest = new(HttpMethod.Get, NCSI_TEST_URL);
+                HttpResponseMessage response = client.Send(webRequest);
+				string result = response.Content.ReadAsStringAsync().Result;
+                if (result != NCSI_TEST_RESULT) return false;
+				IPHostEntry dnsHost = Dns.GetHostEntry(NCSI_DNS);
+				if (dnsHost.AddressList.Length < 0 || dnsHost.AddressList[0].ToString() != NCSI_DNS_IP_ADDRESS) return false;
+			} catch (Exception ex) {
+				Console.WriteLine(ex); 
+				return false;
+			}
+			return true;
+		}
+
+		[return: NotNull]
 		static void DownloadFileAsync(Uri uri, FileInfo Destination) {
 			HttpRequestMessage webRequest = new(HttpMethod.Get, uri);
 			HttpResponseMessage response = client.Send(webRequest);
@@ -65,6 +87,12 @@ namespace Launch_KoLMafia {
 					return "";
 				}
 			} catch (HttpRequestException e) {
+				if (e.InnerException is not null && e.InnerException is System.Net.Sockets.SocketException) {
+					if (!preferences.Silent) {
+						MessageBox.Show("It appears there is no network connection. Launcher will now terminate.");
+					}
+                    Environment.Exit(e.InnerException.HResult);
+                }
 				Console.WriteLine("\nException Caught!");
 				Console.WriteLine(e.Message);
 				return "";
@@ -146,7 +174,15 @@ namespace Launch_KoLMafia {
 				killOnUpdate = args.Contains("--killOnUpdate", StringComparer.CurrentCultureIgnoreCase);
 				silent = args.Contains("--silent", StringComparer.CurrentCultureIgnoreCase);
 			}
-			preferences = new("""Software\Sapph Tools\KoLMafia Launcher\""", silent);
+
+            if (!IsInternetAvailable()) {
+                if (!silent) {
+                    MessageBox.Show("It appears there is no network connection. Launcher will now terminate.");
+                }
+                Environment.Exit(1);
+            }
+
+            preferences = new("""Software\Sapph Tools\KoLMafia Launcher\""", silent);
 			if (!silent) {
 				string releaseVer = CheckForUpdate(preferences.SkippedVersion).ToString();
 				if (releaseVer != "" && preferences.ConfirmPermissions()) {
