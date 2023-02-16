@@ -89,6 +89,10 @@ namespace Launch_KoLMafia {
                 Program.LogVerbose("Path value is null or blank");
                 return false; 
 			}
+			if(pathKey.ToString()!.Substring(1,1) != ":" && pathKey.ToString()!.Substring(1, 1) != @"\") {
+				Program.LogVerbose("Invalid path saved previously, re-init will occur.");
+				return false;
+			}
 			return true;
 		}
 		[return: MaybeNull]
@@ -126,7 +130,7 @@ namespace Launch_KoLMafia {
             Program.LogVerbose("Creating jarpath object");
             object jarPath = prefKey.GetValue("PathToKoL", "");
 			bool askForDir;
-			if (jarPath.ToString() == "") {
+			if (jarPath.ToString() == "" || (jarPath.ToString()!.Substring(1, 1) != ":" && jarPath.ToString()!.Substring(1, 1) != @"\")) {
                 Program.LogVerbose("Decision to ask for jarpath from user");
                 OpenFileDialog dialog = new() {
                     InitialDirectory = Environment.GetEnvironmentVariable("UserProfile"),
@@ -141,10 +145,12 @@ namespace Launch_KoLMafia {
                 if (dialog.ShowDialog() == DialogResult.OK && !String.IsNullOrEmpty(dialog.FileName)) {
 					Program.LogVerbose($"Selected file: {dialog.FileName};");
 					FileInfo selectedJar = new(dialog.FileName);
-					string installPath = selectedJar.Directory!.Name;
+					Program.LogVerbose(selectedJar.Directory!.FullName);
+					string installPath = selectedJar.Directory!.FullName;
                     Program.LogVerbose("JAR identified. Saving path to prefkey");
                     prefKey.SetValue("PathToKoL", installPath, RegistryValueKind.String);
-					askForDir = false;
+                    Program.LogVerbose($"InstallPath: {installPath};");
+                    askForDir = false;
 				} else {
 					askForDir = true;
 				}
@@ -162,7 +168,8 @@ namespace Launch_KoLMafia {
 				}
                 Program.LogVerbose("Path identified, saving to prefkey");
                 prefKey.SetValue("PathToKoL", installPath, RegistryValueKind.String);
-			}
+                Program.LogVerbose($"InstallPath: {installPath};");
+            }
 			if (prefKey.GetValue("MaxDownloadAttempts", null) is null) {
 				prefKey.SetValue("MaxDownloadAttempts", 3, RegistryValueKind.DWord);
 			}

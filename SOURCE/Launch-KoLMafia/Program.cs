@@ -231,7 +231,7 @@ namespace Launch_KoLMafia {
 					}
 				}
 			}
-
+			LogVerbose($"Retreived Install Location: {preferences.InstallLocation}");
 			currentList = System.IO.Directory.GetFiles(preferences.InstallLocation, "*.jar");
 
 			if (currentList.Length > 1) {
