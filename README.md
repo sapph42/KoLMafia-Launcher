@@ -33,6 +33,9 @@ KolMafia Launcher is a launcher/updater for KoLMafia launcher.
 `--Silent`
 * Prevents any error messages from appearing. Useful in conjunction with scheduled tasks
 
+`--Verbose`
+* Adds a number of logging statements to the console. Useful for assisting with troubleshooting.
+
 ## Legal Notice
 
 icon.ico is a derivative artwork, based on IP owned in whole by Asymmetric Publications, LLC. This derivative has been created with permission from Asymmetric Publications, LLC. The author of KoLMafia-Launcher does not have the capacity to permit sub-derivative works, or to permit use of such work in other projects without authors of those projects obtaining express written consent of Asymmetric Publications, LLC.
