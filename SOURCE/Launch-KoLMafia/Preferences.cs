@@ -57,22 +57,38 @@ namespace Launch_KoLMafia {
 			return false;
 		}
 		private void Initialize(bool silent) {
-			if (!(Preferences.PrefsExistAndNotNull(PrefPath)) && silent) {
+			Program.LogVerbose("Preference initialization started");
+			bool prefsvalid = PrefsExistAndNotNull(PrefPath);
+			if (!prefsvalid && silent) {
 				throw new ArgumentException(Properties.Resources.SilentEmptyRegistryError);
-			} else if (!(Preferences.PrefsExistAndNotNull(PrefPath)) && !silent) {
+			} else if (!prefsvalid && !silent) {
 				Preferences.InitPrefs(PrefPath);
 			}
 			this.Silent = silent;
+			Program.LogVerbose("Init complete. Loading values into object properties");
 			this.LoadVals();
 		}
 		[return: NotNull]
 		private static bool PrefsExistAndNotNull([NotNullWhen(true)]string prefPath) {
-			if (prefPath == "") { return false; }
+			Program.LogVerbose("Pref check started");
+			if (prefPath == "") {
+				Program.LogVerbose("No pref path provided.");
+				return false; 
+			}
 			RegistryKey? prefKey = Registry.CurrentUser.OpenSubKey(prefPath);
-			if (prefKey is null) { return false; }
+			if (prefKey is null) {
+                Program.LogVerbose("Pref key does not exist");
+                return false; 
+			}
 			object? pathKey = prefKey.GetValue("PathToKoL", null);
-			if (pathKey is null) { return false; }
-			if (string.IsNullOrEmpty(pathKey.ToString())) { return false; }
+			if (pathKey is null) {
+                Program.LogVerbose("Pref subkey does not exist.");
+                return false; 
+			}
+			if (string.IsNullOrEmpty(pathKey.ToString())) {
+                Program.LogVerbose("Path value is null or blank");
+                return false; 
+			}
 			return true;
 		}
 		[return: MaybeNull]
@@ -100,34 +116,52 @@ namespace Launch_KoLMafia {
 			}
 		}
 		private static void InitPrefs(string prefPath) {
+			Program.LogVerbose("Decision to create new prefs.");
 			if (prefPath is null) {
-	throw new UnreachableException();
+                Program.LogVerbose("No pref path provided. Unreachable");
+                throw new UnreachableException();
 			}
-			RegistryKey? prefKey = Registry.CurrentUser.CreateSubKey(prefPath);
-			object jarPath = prefKey.GetValue("PathToKoL", "");
+            Program.LogVerbose("Creating pref key");
+            RegistryKey? prefKey = Registry.CurrentUser.CreateSubKey(prefPath);
+            Program.LogVerbose("Creating jarpath object");
+            object jarPath = prefKey.GetValue("PathToKoL", "");
 			bool askForDir;
 			if (jarPath.ToString() == "") {
-				using OpenFileDialog dialog = new();
-				dialog.InitialDirectory = Environment.GetEnvironmentVariable("UserProfile");
-				dialog.Filter = "JAR files (*.jar)| *.jar";
-				dialog.Title = Properties.Resources.JarFileSelectTitle;
-				if (dialog.ShowDialog() == DialogResult.OK || dialog.FileName is not null) {
+                Program.LogVerbose("Decision to ask for jarpath from user");
+                OpenFileDialog dialog = new() {
+                    InitialDirectory = Environment.GetEnvironmentVariable("UserProfile"),
+                    Filter = "JAR files (*.jar)| *.jar",
+                    Title = Properties.Resources.JarFileSelectTitle,
+					ShowHelp = true
+                };
+                Program.LogVerbose("Creating dialog");
+				Program.LogVerbose($"InitialDirectory: {dialog.InitialDirectory}");
+				Program.LogVerbose($"Filter: {dialog.Filter}");
+				Program.LogVerbose($"Title: {dialog.Title}");
+                if (dialog.ShowDialog() == DialogResult.OK && !String.IsNullOrEmpty(dialog.FileName)) {
+					Program.LogVerbose($"Selected file: {dialog.FileName};");
 					FileInfo selectedJar = new(dialog.FileName);
 					string installPath = selectedJar.Directory!.Name;
-					prefKey.SetValue("PathToKoL", installPath, RegistryValueKind.String);
+                    Program.LogVerbose("JAR identified. Saving path to prefkey");
+                    prefKey.SetValue("PathToKoL", installPath, RegistryValueKind.String);
 					askForDir = false;
 				} else {
 					askForDir = true;
 				}
+				dialog.Dispose();
 			} else {
-				askForDir = false;
+                Program.LogVerbose("Jarpath exits");
+                askForDir = false;
 			}
 			if (askForDir) {
-				string? installPath = AskForDir();
+                Program.LogVerbose("Location of JAR was requested, but not provided. Asking for dir to install new jar");
+                string? installPath = AskForDir();
 				if (installPath is null) {
-					Environment.Exit(0);
+                    Program.LogVerbose("User cancelled out of request. No further action possible.");
+                    Environment.Exit(0);
 				}
-				prefKey.SetValue("PathToKoL", installPath, RegistryValueKind.String);
+                Program.LogVerbose("Path identified, saving to prefkey");
+                prefKey.SetValue("PathToKoL", installPath, RegistryValueKind.String);
 			}
 			if (prefKey.GetValue("MaxDownloadAttempts", null) is null) {
 				prefKey.SetValue("MaxDownloadAttempts", 3, RegistryValueKind.DWord);
@@ -150,7 +184,7 @@ namespace Launch_KoLMafia {
 			_skippedVersion = prefKey.GetValue("SkippedVersion", "").ToString();
 			string AssemblyDir = AppContext.BaseDirectory;
 			string[] Runtimes = Directory.GetFiles(AssemblyDir, "vcruntime*.dll");
-			if (Runtimes.Count() > 0) {
+			if (Runtimes.Length > 0) {
 				Standalone = true;
 			} else {
 				Standalone = false;

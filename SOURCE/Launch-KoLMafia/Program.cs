@@ -24,6 +24,8 @@ namespace Launch_KoLMafia {
 		static readonly HashAlgorithm cryptoService = MD5.Create();
 		private static Preferences preferences = null!;
 
+		public static bool verbose = false;
+
 		[return: NotNull]
 		private static bool IsInternetAvailable() {
 			const string NCSI_TEST_URL = @"http://www.msftncsi.com/ncsi.txt";
@@ -32,10 +34,10 @@ namespace Launch_KoLMafia {
 			const string NCSI_DNS_IP_ADDRESS = @"131.107.255.255";
 
 			try {
-                HttpRequestMessage webRequest = new(HttpMethod.Get, NCSI_TEST_URL);
-                HttpResponseMessage response = client.Send(webRequest);
+				HttpRequestMessage webRequest = new(HttpMethod.Get, NCSI_TEST_URL);
+				HttpResponseMessage response = client.Send(webRequest);
 				string result = response.Content.ReadAsStringAsync().Result;
-                if (result != NCSI_TEST_RESULT) return false;
+				if (result != NCSI_TEST_RESULT) return false;
 				IPHostEntry dnsHost = Dns.GetHostEntry(NCSI_DNS);
 				if (dnsHost.AddressList.Length < 0 || dnsHost.AddressList[0].ToString() != NCSI_DNS_IP_ADDRESS) return false;
 			} catch (Exception ex) {
@@ -91,8 +93,8 @@ namespace Launch_KoLMafia {
 					if (!preferences.Silent) {
 						MessageBox.Show("It appears there is no network connection. Launcher will now terminate.");
 					}
-                    Environment.Exit(e.InnerException.HResult);
-                }
+					Environment.Exit(e.InnerException.HResult);
+				}
 				Console.WriteLine("\nException Caught!");
 				Console.WriteLine(e.Message);
 				return "";
@@ -115,10 +117,10 @@ namespace Launch_KoLMafia {
 			if (result == nobutton) {
 				return releaseVersion.ToString();
 			}
-            string targetInstallerName = $"KoLMafia-Launcher_{releaseVersion}.exe";
-            if (preferences.Standalone) {
-                targetInstallerName = $"KoLMafia-Launcher_standalone_{releaseVersion}.exe";
-            }
+			string targetInstallerName = $"KoLMafia-Launcher_{releaseVersion}.exe";
+			if (preferences.Standalone) {
+				targetInstallerName = $"KoLMafia-Launcher_standalone_{releaseVersion}.exe";
+			}
 			
 			Uri sourceURI = new($"https://github.com/sapph42/KoLMafia-Launcher/raw/main/{targetInstallerName}");
 			FileInfo destination = new(Environment.GetEnvironmentVariable("Temp") + @"\" + targetInstallerName);
@@ -150,6 +152,17 @@ namespace Launch_KoLMafia {
 				return false;
 			}
 		}
+		public static void LogVerbose(string log) {
+			if (verbose)
+				Console.WriteLine(log);
+		}
+
+		public static void LogVerbose(string[] logs) {
+			foreach(string log in logs) {
+				LogVerbose(log);
+			}
+		}
+		[STAThread]
 		static void Main(string[] args) {
 
 			Application.ThreadException += new ThreadExceptionEventHandler(Application_ThreadException);
@@ -173,16 +186,19 @@ namespace Launch_KoLMafia {
 				noLaunch = args.Contains("--noLaunch", StringComparer.CurrentCultureIgnoreCase);
 				killOnUpdate = args.Contains("--killOnUpdate", StringComparer.CurrentCultureIgnoreCase);
 				silent = args.Contains("--silent", StringComparer.CurrentCultureIgnoreCase);
+				verbose = args.Contains("--verbose", StringComparer.CurrentCultureIgnoreCase) ;
 			}
+			LogVerbose("Arguments parsed.");
+			if (!IsInternetAvailable()) {
+				if (!silent) {
+					MessageBox.Show("It appears there is no network connection. Launcher will now terminate.");
+				}
+				Environment.Exit(1);
+			}
+			LogVerbose("Internet connection confirmed.");
 
-            if (!IsInternetAvailable()) {
-                if (!silent) {
-                    MessageBox.Show("It appears there is no network connection. Launcher will now terminate.");
-                }
-                Environment.Exit(1);
-            }
-
-            preferences = new("""Software\Sapph Tools\KoLMafia Launcher\""", silent);
+			preferences = new("""Software\Sapph Tools\KoLMafia Launcher\""", silent);
+			LogVerbose("Preference object initialized");
 			if (!silent) {
 				string releaseVer = CheckForUpdate(preferences.SkippedVersion).ToString();
 				if (releaseVer != "" && preferences.ConfirmPermissions()) {
@@ -312,12 +328,12 @@ namespace Launch_KoLMafia {
 					throw new UnreachableException("Heisenbug found determining current Mafia JAR and/or replacing it.");
 				}
 			} catch (ExternalException e) {
-			    Console.WriteLine("\nException Caught!");
-			    Console.WriteLine(e.Message);
-			    if (!silent && currentFile.Exists) {
-			        MessageBox.Show(Properties.Resources.RetreivalError);
-			        latestFile = currentFile;
-			    }
+				Console.WriteLine("\nException Caught!");
+				Console.WriteLine(e.Message);
+				if (!silent && currentFile.Exists) {
+					MessageBox.Show(Properties.Resources.RetreivalError);
+					latestFile = currentFile;
+				}
 				if (currentFile is null) {
 					throw new UnreachableException("Heisenbug found determining current Mafia JAR and/or replacing it.");
 				}
