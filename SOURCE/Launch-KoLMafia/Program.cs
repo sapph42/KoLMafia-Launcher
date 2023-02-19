@@ -100,6 +100,7 @@ namespace Launch_KoLMafia {
 				return "";
 			}
 			if (releaseVersion.Equals(version) || releaseVersion.Equals(skippedVersion) || version.IsGreater(releaseVersion)) {
+                ConsoleOut("Launch-KoLMafia is up-to-date!", ConsoleColor.Black, ConsoleColor.Green); 
 				return "";
 			}
 			string msg = "";
@@ -156,11 +157,17 @@ namespace Launch_KoLMafia {
 			if (verbose)
 				Console.WriteLine(log);
 		}
-
 		public static void LogVerbose(string[] logs) {
 			foreach(string log in logs) {
 				LogVerbose(log);
 			}
+		}
+		public static void ConsoleOut(string log, ConsoleColor back = ConsoleColor.Black, ConsoleColor fore = ConsoleColor.White) {
+			Console.BackgroundColor = back;
+			Console.ForegroundColor = fore;
+			Console.WriteLine(log);
+			Console.BackgroundColor = ConsoleColor.Black;
+			Console.ForegroundColor = ConsoleColor.White;
 		}
 		[STAThread]
 		static void Main(string[] args) {
@@ -189,6 +196,7 @@ namespace Launch_KoLMafia {
 				verbose = args.Contains("--verbose", StringComparer.CurrentCultureIgnoreCase) ;
 			}
 			LogVerbose("Arguments parsed.");
+			ConsoleOut($"INFO: noLaunch:{noLaunch}; killOnUpdate:{killOnUpdate}; silent:{silent}; verbose:{verbose}",ConsoleColor.Black, ConsoleColor.DarkYellow);
 			if (!IsInternetAvailable()) {
 				if (!silent) {
 					MessageBox.Show("It appears there is no network connection. Launcher will now terminate.");
@@ -279,6 +287,7 @@ namespace Launch_KoLMafia {
 						(currentFile.Hash(cryptoService) != canonicalFingerprint))) {
 					int attempts = 1;
 					FileInfo destination = new(preferences.InstallLocation + @"\" + latestJARName);
+					ConsoleOut("New version of Mafia found! Download in progress!", ConsoleColor.Black, ConsoleColor.DarkYellow);
 					int downloadStatus = GetWebFile(jarURI, destination, canonicalFingerprint);
 					bool downloadSuccess = downloadStatus == 200;
 					while (downloadStatus != 200 && attempts < preferences.MaxAttempts) {
@@ -292,6 +301,7 @@ namespace Launch_KoLMafia {
 					if (downloadSuccess) {
 						if (exists) currentFile.Delete();
 						latestFile = destination;
+						ConsoleOut("Download complete!", ConsoleColor.Black, ConsoleColor.Green);
 					} else {
 						if (!silent) {
 							string title = Properties.Resources.RetreivalErrorTitle;
@@ -312,6 +322,7 @@ namespace Launch_KoLMafia {
 						}
 					}
 				} else {
+					ConsoleOut("KoLMafia already up-to-date.", ConsoleColor.Black, ConsoleColor.Green);
 					latestFile = currentFile;
 				}
 				if (currentFile is null) {
