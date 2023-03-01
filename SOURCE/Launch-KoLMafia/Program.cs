@@ -162,10 +162,14 @@ namespace Launch_KoLMafia {
 				LogVerbose(log);
 			}
 		}
-		public static void ConsoleOut(string log, ConsoleColor back = ConsoleColor.Black, ConsoleColor fore = ConsoleColor.White) {
+		public static void ConsoleOut(string log, ConsoleColor back = ConsoleColor.Black, ConsoleColor fore = ConsoleColor.White, bool newline = true) {
 			Console.BackgroundColor = back;
 			Console.ForegroundColor = fore;
-			Console.WriteLine(log);
+			if (newline) {
+				Console.WriteLine(log);
+			} else {
+				Console.Write(log);
+			}
 			Console.BackgroundColor = ConsoleColor.Black;
 			Console.ForegroundColor = ConsoleColor.White;
 		}
@@ -355,7 +359,50 @@ namespace Launch_KoLMafia {
 						UseShellExecute= true,
 						WorkingDirectory = latestFile.Directory!.FullName
 					};
-					System.Diagnostics.Process.Start(processStartInfo);
+                    ConsoleOut("Launching Mafia ", ConsoleColor.Black, ConsoleColor.Green, false);
+                    Process? jar = Process.Start(processStartInfo);
+					Thread.Sleep(500);
+					if (jar is null) {
+                        ConsoleOut("JRE process failed to instantiate after 0.5 seconds", ConsoleColor.Black, ConsoleColor.Red);
+						Thread.Sleep(2000);
+						Application.Exit();
+                    }
+					if (jar!.WaitForInputIdle(10000)) {
+						IntPtr handle = jar.MainWindowHandle;
+						int maxloop = 20;
+						int loopcount = 0;
+						while (handle == (IntPtr)0 && loopcount < maxloop) {
+                            ConsoleOut(".", ConsoleColor.Black, ConsoleColor.Green, false);
+                            Thread.Sleep(500);
+							handle = jar.MainWindowHandle;
+							loopcount++;
+						}
+						if (loopcount == maxloop) {
+							ConsoleOut("");
+                            ConsoleOut("Mafia window not loaded after 10 seconds.", ConsoleColor.Black, ConsoleColor.Red);
+                            Thread.Sleep(2000);
+							Application.Exit();
+                        }
+						loopcount = 0;
+						while (!WinAPI.IsWindow(handle) && loopcount < maxloop) {
+                            ConsoleOut(".", ConsoleColor.Black, ConsoleColor.Green, false);
+                            Thread.Sleep(100);
+							loopcount++;
+						}
+                        if (loopcount == maxloop) {
+                            ConsoleOut("");
+                            ConsoleOut("Mafia window not visible after 2 seconds.", ConsoleColor.Black, ConsoleColor.Red);
+                            Thread.Sleep(2000);
+                            Application.Exit();
+                        }
+                        ConsoleOut("");
+                        ConsoleOut("Launch complete!", ConsoleColor.Black, ConsoleColor.Green);
+                        Thread.Sleep(1000);
+                    } else {
+                        ConsoleOut("");
+                        ConsoleOut("Mafia JAR not loaded after 10 seconds.", ConsoleColor.Black, ConsoleColor.Red);
+                        Thread.Sleep(2000);
+                    }
 				}
 			}
 		}

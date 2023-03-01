@@ -79,6 +79,8 @@ namespace Launch_KoLMafia {
 
             return sb.ToString();
         }
-
+        [DllImport("User32.dll", CharSet = CharSet.Unicode)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool IsWindow(IntPtr hWnd);
     }
 }
