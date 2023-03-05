@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Text;
 
 namespace Launch_KoLMafia {
     internal static class WinAPI {
         [DllImport("Shlwapi.dll", CharSet = CharSet.Unicode)]
+        [SupportedOSPlatform("windows")]
         private static extern uint AssocQueryString(
             AssocF flags,
             AssocStr str,
@@ -61,6 +63,7 @@ namespace Launch_KoLMafia {
         }
 
         [return: MaybeNull]
+        [SupportedOSPlatform("windows")]
         public static string AssocQueryString(AssocStr association, string extension) {
             const int S_OK = 0;
             const int S_FALSE = 1;
@@ -81,6 +84,7 @@ namespace Launch_KoLMafia {
         }
         [DllImport("User32.dll", CharSet = CharSet.Unicode)]
         [return: MarshalAs(UnmanagedType.Bool)]
+        [SupportedOSPlatform("windows")]
         public static extern bool IsWindow(IntPtr hWnd);
     }
 }

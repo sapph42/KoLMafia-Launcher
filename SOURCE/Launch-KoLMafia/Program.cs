@@ -7,12 +7,13 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Net.NetworkInformation;
 using System.Resources;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Threading;
-using System.Windows.Forms;
+#if OS_WINDOWS
+	using System.Windows.Forms;
+#endif
 
 [assembly: NeutralResourcesLanguageAttribute("en-US")]
 namespace Launch_KoLMafia {
@@ -103,12 +104,7 @@ namespace Launch_KoLMafia {
                 ConsoleOut("Launch-KoLMafia is up-to-date!", ConsoleColor.Black, ConsoleColor.Green); 
 				return "";
 			}
-			string msg = "";
-			if (preferences.ConfirmPermissions()) {
-				msg = string.Format(Properties.Resources.NewVersionDialogMsg, releaseVersion.ToString());
-			} else {
-				msg = string.Format(Properties.Resources.NewVersionDialogMsgNoSkip, releaseVersion.ToString());
-			}
+			string msg = string.Format(Properties.Resources.NewVersionDialogMsg, releaseVersion.ToString());
 			string title = Properties.Resources.NewVersionDialogTitle;
 			MessageBoxButtons buttons = MessageBoxButtons.YesNo;
 			DialogResult nobutton = DialogResult.No;
@@ -209,15 +205,27 @@ namespace Launch_KoLMafia {
 			}
 			LogVerbose("Internet connection confirmed.");
 
-			preferences = new("""Software\Sapph Tools\KoLMafia Launcher\""", silent);
+			preferences = new(silent);
 			LogVerbose("Preference object initialized");
 			if (!silent) {
 				string releaseVer = CheckForUpdate(preferences.SkippedVersion).ToString();
-				if (releaseVer != "" && preferences.ConfirmPermissions()) {
+				if (releaseVer != "") {
 					preferences.SkippedVersion = releaseVer;
 				}
 			}
-			javaName = WinAPI.AssocQueryString(WinAPI.AssocStr.DDEApplication, ".jar") ?? "";
+			if (Environment.OSVersion.Platform == PlatformID.Win32NT) {
+				javaName = WinAPI.AssocQueryString(WinAPI.AssocStr.DDEApplication, ".jar") ?? "";
+			} else {
+                string mimeType = "application/java-archive";
+                Process process = new();
+                process.StartInfo.FileName = "xdg-mime";
+                process.StartInfo.Arguments = $"query default {mimeType}";
+                process.StartInfo.RedirectStandardOutput = true;
+                process.Start();
+                string output = process.StandardOutput.ReadToEnd();
+                process.WaitForExit();
+                javaName = output.Trim();
+            }
 			if (javaName == "") { killOnUpdate = false; }
 			if (killOnUpdate) {
 				if (!KillAllProcByName(javaName)) {
@@ -362,6 +370,8 @@ namespace Launch_KoLMafia {
                     ConsoleOut("Launching Mafia ", ConsoleColor.Black, ConsoleColor.Green, false);
                     Process? jar = Process.Start(processStartInfo);
 					Thread.Sleep(500);
+					if (Environment.OSVersion.Platform != PlatformID.Win32NT)
+						Application.Exit();
 					if (jar is null) {
                         ConsoleOut("JRE process failed to instantiate after 0.5 seconds", ConsoleColor.Black, ConsoleColor.Red);
 						Thread.Sleep(2000);
