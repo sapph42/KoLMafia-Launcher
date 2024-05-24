@@ -2,6 +2,10 @@
 
 KolMafia Launcher is a launcher/updater for KoLMafia launcher.
 
+## Support
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/G2G6YI7DO)
+
 ## Features
 
 * Automatically determines the system-defined launcher for GUI-based JAR files, and uses that to launch KoLMafia
