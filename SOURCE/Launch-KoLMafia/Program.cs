@@ -10,7 +10,9 @@ using System.Net.Http;
 using System.Resources;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 #if OS_WINDOWS
 	using System.Windows.Forms;
 #endif
@@ -18,7 +20,7 @@ using System.Threading;
 [assembly: NeutralResourcesLanguageAttribute("en-US")]
 namespace Launch_KoLMafia {
 	internal static class Program {
-		private const string KoLBaseLocation = @"https://builds.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/artifact/dist/";
+		private const string KoLBaseLocation = @"https://api.github.com/repos/kolmafia/kolmafia/releases";
 		// private const string KoLAPI = @"https://ci.kolmafia.us/job/Kolmafia/lastSuccessfulBuild/api/json";
 		// artifactJSON.RootElement.GetProperty("artifacts")[0].GetProperty("relativePath").ToString();
 		static readonly HttpClient client = new();
@@ -283,24 +285,46 @@ namespace Launch_KoLMafia {
 				currentFile = new(currentList[0]);
 			}
 			try {
-				HtmlNode? body = KoLBaseLocation.GetUriBody();
-				latestJARName = body.GetFirstMatchingDescendent("a", @"\.jar$")! ?? "";
-				if (latestJARName == "") {
-					throw new ExternalException("New jar name not found at KoLMafia site.  Parse error.");
-				}
-				jarURI = new(KoLBaseLocation.AbsoluteUri + latestJARName);
-				fingerprintURI = new(jarURI.AbsoluteUri + @"/*fingerprint*/");
+                //HtmlNode? body = KoLBaseLocation.GetUriBody();
+                //latestJARName = body.GetFirstMatchingDescendent("a", @"\.jar$")! ?? "";
+                string assetID = "";
+                var client = new HttpClient();
+                var request = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/repos/kolmafia/kolmafia/releases/latest");
+                request.Headers.Add("Accept", @"application/json");
+				request.Headers.Add("User-Agent", @"Launch-KolMafia/5.1.4.0");
+				request.Headers.Add("Host", @"api.github.com");
+                var response = Task.Run<HttpResponseMessage>(async () => await client.SendAsync(request)).Result ;
+                response.EnsureSuccessStatusCode();
+				var content = Task.Run<string>(async () => await response.Content.ReadAsStringAsync()).Result ;
+                var apiResponse =
+                    System.Text.Json.JsonDocument.Parse(content);
+                for (int i = 0; i < apiResponse.RootElement.GetProperty("assets").GetArrayLength(); i++) {
+                    var asset = apiResponse.RootElement.GetProperty("assets")[i];
+                    if (Regex.IsMatch(asset.GetProperty("name").ToString(), @"\.jar$")) {
+                        assetID = asset.GetProperty("id").ToString();
+                        latestJARName = asset.GetProperty("name").ToString();
+                        break;
+                    }
+                }
 
-				canonicalFingerprint = fingerprintURI.GetUriBody().GetFirstMatchingDescendent("li", @"[a-z0-9]{32}", true) ?? "";
 
 				if (!exists || 
-					(currentFile.Name != latestJARName) || 
-					(canonicalFingerprint != "" && 
-						(currentFile.Hash(cryptoService) != canonicalFingerprint))) {
+					currentFile.Name != latestJARName) {
 					int attempts = 1;
 					FileInfo destination = new(preferences.InstallLocation + @"\" + latestJARName);
 					ConsoleOut("New version of Mafia found! Download in progress!", ConsoleColor.Black, ConsoleColor.DarkYellow);
-					int downloadStatus = GetWebFile(jarURI, destination, canonicalFingerprint);
+
+                    request = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/repos/kolmafia/kolmafia/releases/assets/{assetID}");
+                    request.Headers.Add("Accept", @"application/json");
+                    request.Headers.Add("User-Agent", @"Launch-KolMafia/5.1.4.0");
+                    request.Headers.Add("Host", @"api.github.com");
+                    response = Task.Run<HttpResponseMessage>(async () => await client.SendAsync(request)).Result;
+                    response.EnsureSuccessStatusCode();
+                    content = Task.Run<string>(async () => await response.Content.ReadAsStringAsync()).Result;
+                    apiResponse = System.Text.Json.JsonDocument.Parse(content);
+                    jarURI = new Uri(apiResponse.RootElement.GetProperty("browser_download_url").ToString());
+
+                    int downloadStatus = GetWebFile(jarURI, destination, canonicalFingerprint);
 					bool downloadSuccess = downloadStatus == 200;
 					while (downloadStatus != 200 && attempts < preferences.MaxAttempts) {
 						if (destination.Exists) { destination.Delete(); }
